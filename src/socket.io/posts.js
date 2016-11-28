@@ -44,7 +44,7 @@ SocketPosts.reply = function (socket, data, callback) {
 
 		callback(null, postData);
 
-		socket.emit('event:new_post', result);
+		websockets.in('uid_' + socket.uid).emit('event:new_post', result);
 
 		user.updateOnlineUsers(socket.uid);
 
@@ -122,23 +122,35 @@ SocketPosts.getReplies = function (socket, pid, callback) {
 	if (!utils.isNumber(pid)) {
 		return callback(new Error('[[error:invalid-data]'));
 	}
+	var postPrivileges;
 	async.waterfall([
 		function (next) {
 			posts.getPidsFromSet('pid:' + pid + ':replies', 0, -1, false, next);
 		},
 		function (pids, next) {
-			privileges.posts.filter('read', pids, socket.uid, next);
+			async.parallel({
+				posts: function (next) {
+					posts.getPostsByPids(pids, socket.uid, next);
+				},
+				privileges: function (next) {
+					privileges.posts.get(pids, socket.uid, next);
+				}
+			}, next);
 		},
-		function (pids, next) {
-			posts.getPostsByPids(pids, socket.uid, next);
+		function (results, next) {
+			postPrivileges = results.privileges;
+			results.posts = results.posts.filter(function (postData, index) {
+				return postData && postPrivileges[index].read;
+			});
+			topics.addPostData(results.posts, socket.uid, next);
+		},
+		function (postData, next) {
+			postData.forEach(function (postData) {
+				posts.modifyPostByPrivilege(postData, postPrivileges.isAdminOrMod);
+			});
+			next(null, postData);
 		}
-	], function (err, postData) {
-		if (err) {
-			return callback(err);
-		}
-
-		topics.addPostData(postData, socket.uid, callback);
-	});
+	], callback);
 };
 
 

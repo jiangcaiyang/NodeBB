@@ -1,5 +1,4 @@
 'use strict';
-/*global require, before, beforeEach, after*/
 
 var async = require('async');
 var assert = require('assert');
@@ -16,26 +15,20 @@ var socketPosts = require('../src/socket.io/posts');
 describe('Topic\'s', function () {
 	var topic;
 	var categoryObj;
+	var adminUid;
 
 	before(function (done) {
-		var userData = {
-			username: 'John Smith',
-			password: 'swordfish',
-			email: 'john@example.com',
-			callback: undefined
-		};
-
-		User.create({username: userData.username, password: userData.password, email: userData.email}, function (err, uid) {
+		groups.resetCache();
+		User.create({username: 'admin'}, function (err, uid) {
 			if (err) {
 				return done(err);
 			}
 
+			adminUid = uid;
+
 			categories.create({
 				name: 'Test Category',
-				description: 'Test category created by testing script',
-				icon: 'fa-check',
-				blockclass: 'category-blue',
-				order: '5'
+				description: 'Test category created by testing script'
 			}, function (err, category) {
 				if (err) {
 					return done(err);
@@ -223,11 +216,16 @@ describe('Topic\'s', function () {
 		});
 	});
 
-	describe('delete/restore/purge', function () {
+	describe('tools/delete/restore/purge', function () {
 		var newTopic;
 		var followerUid;
+		var moveCid;
+		var socketTopics = require('../src/socket.io/topics');
 		before(function (done) {
 			async.waterfall([
+				function (next) {
+					groups.join('administrators', adminUid, next);
+				},
 				function (next) {
 					topics.post({uid: topic.userId, title: topic.title, content: topic.content, cid: topic.categoryId}, function (err, result) {
 						assert.ifError(err);
@@ -241,26 +239,112 @@ describe('Topic\'s', function () {
 				function (_uid, next) {
 					followerUid = _uid;
 					topics.follow(newTopic.tid, _uid, next);
+				},
+				function (next) {
+					categories.create({
+						name: 'Test Category',
+						description: 'Test category created by testing script'
+					}, function (err, category) {
+						if (err) {
+							return next(err);
+						}
+						moveCid = category.cid;
+						next();
+					});
 				}
 			], done);
 		});
 
+		it('should load topic tools', function (done) {
+			socketTopics.loadTopicTools({uid: 1}, {tid: newTopic.tid}, function (err, data) {
+				assert.ifError(err);
+				assert(data);
+				done();
+			});
+		});
+
 		it('should delete the topic', function (done) {
-			topics.delete(newTopic.tid, 1, function (err) {
+			socketTopics.delete({uid: 1}, {tids: [newTopic.tid], cid: categoryObj.cid}, function (err) {
 				assert.ifError(err);
 				done();
 			});
 		});
 
 		it('should restore the topic', function (done) {
-			topics.restore(newTopic.tid, 1, function (err) {
+			socketTopics.restore({uid: 1}, {tids: [newTopic.tid], cid: categoryObj.cid}, function (err) {
 				assert.ifError(err);
 				done();
 			});
 		});
 
+		it('should lock topic', function (done) {
+			socketTopics.lock({uid: 1}, {tids: [newTopic.tid], cid: categoryObj.cid}, function (err) {
+				assert.ifError(err);
+				topics.isLocked(newTopic.tid, function (err, isLocked) {
+					assert.ifError(err);
+					assert(isLocked);
+					done();
+				});
+			});
+		});
+
+		it('should unlock topic', function (done) {
+			socketTopics.unlock({uid: 1}, {tids: [newTopic.tid], cid: categoryObj.cid}, function (err) {
+				assert.ifError(err);
+				topics.isLocked(newTopic.tid, function (err, isLocked) {
+					assert.ifError(err);
+					assert(!isLocked);
+					done();
+				});
+			});
+		});
+
+		it('should pin topic', function (done) {
+			socketTopics.pin({uid: 1}, {tids: [newTopic.tid], cid: categoryObj.cid}, function (err) {
+				assert.ifError(err);
+				db.getObjectField('topic:' + newTopic.tid, 'pinned', function (err, pinned) {
+					assert.ifError(err);
+					assert.strictEqual(parseInt(pinned, 10), 1);
+					done();
+				});
+			});
+		});
+
+		it('should unpin topic', function (done) {
+			socketTopics.unpin({uid: 1}, {tids: [newTopic.tid], cid: categoryObj.cid}, function (err) {
+				assert.ifError(err);
+				db.getObjectField('topic:' + newTopic.tid, 'pinned', function (err, pinned) {
+					assert.ifError(err);
+					assert.strictEqual(parseInt(pinned, 10), 0);
+					done();
+				});
+			});
+		});
+
+		it('should move all topics', function (done) {
+			socketTopics.moveAll({uid: 1}, {cid: moveCid, currentCid: categoryObj.cid}, function (err) {
+				assert.ifError(err);
+				topics.getTopicField(newTopic.tid, 'cid', function (err, cid) {
+					assert.ifError(err);
+					assert.equal(cid, moveCid);
+					done();
+				});
+			});
+		});
+
+		it('should move a topic', function (done) {
+			socketTopics.move({uid: 1}, {cid: categoryObj.cid, tids: [newTopic.tid]}, function (err) {
+				assert.ifError(err);
+				topics.getTopicField(newTopic.tid, 'cid', function (err, cid) {
+					assert.ifError(err);
+					assert.equal(cid, categoryObj.cid);
+					done();
+				});
+			});
+		});
+
 		it('should purge the topic', function (done) {
-			topics.purge(newTopic.tid, 1, function (err) {
+			socketTopics.purge({uid: 1}, {tids: [newTopic.tid], cid: categoryObj.cid}, function (err) {
 				assert.ifError(err);
 				db.isSortedSetMember('uid:' + followerUid + ':followed_tids', newTopic.tid, function (err, isMember) {
 					assert.ifError(err);
@@ -325,7 +409,7 @@ describe('Topic\'s', function () {
 					var topic;
 					var i;
 					for(i = 0; i < topics.length; ++i) {
-						if( topics[i].tid == newTid ) {
+						if (parseInt(topics[i].tid, 10) === parseInt(newTid, 10)) {
 							assert.equal(false, topics[i].unread, 'ignored topic was marked as unread in recent list');
 							return done();
 						}
@@ -377,27 +461,23 @@ describe('Topic\'s', function () {
 		});
 	});
 
-
-
 	describe('.fork', function () {
 		var newTopic;
 		var replies = [];
 		var topicPids;
 		var originalBookmark = 5;
-		function postReply( next ) {
-			topics.reply({uid: topic.userId, content: 'test post ' + replies.length, tid: newTopic.tid},
-				function (err, result) {
+		function postReply(next) {
+			topics.reply({uid: topic.userId, content: 'test post ' + replies.length, tid: newTopic.tid}, function (err, result) {
 					assert.equal(err, null, 'was created with error');
 					assert.ok(result);
-					replies.push( result );
+					replies.push(result);
 					next();
 				}
 			);
 		}
 
-		before( function (done) {
-			async.waterfall(
-				[
+		before(function (done) {
+			async.waterfall([
 				function (next) {
 					groups.join('administrators', topic.userId, next);
 				},
@@ -492,6 +572,312 @@ describe('Topic\'s', function () {
 			});
 		});
 	});
+
+	describe('infinitescroll', function () {
+		var socketTopics = require('../src/socket.io/topics');
+		var tid;
+		before(function (done) {
+			topics.post({uid: topic.userId, title: topic.title, content: topic.content, cid: topic.categoryId}, function (err, result) {
+				assert.ifError(err);
+				tid = result.topicData.tid;
+				done();
+			});
+		});
+
+		it('should error with invalid data', function (done) {
+			socketTopics.loadMore({uid: adminUid}, {}, function (err) {
+				assert.equal(err.message, '[[error:invalid-data]]');
+				done();
+			});
+		});
+
+		it('should infinite load topic posts', function (done) {
+			socketTopics.loadMore({uid: adminUid}, {tid: tid, after: 0}, function (err, data) {
+				assert.ifError(err);
+				assert(data.mainPost);
+				assert(data.posts);
+				assert(data.privileges);
+				done();
+			});
+		});
+
+		it('should error with invalid data', function (done) {
+			socketTopics.loadMoreUnreadTopics({uid: adminUid}, {after: 'invalid'}, function (err, data) {
+				assert.equal(err.message, '[[error:invalid-data]]');
+				done();
+			});
+		});
+
+		it('should load more unread topics', function (done) {
+			socketTopics.markUnread({uid: adminUid}, tid, function (err) {
+				assert.ifError(err);
+				socketTopics.loadMoreUnreadTopics({uid: adminUid}, {cid: topic.categoryId, after: 0}, function (err, data) {
+					assert.ifError(err);
+					assert(data);
+					assert(Array.isArray(data.topics));
+					done();
+				});
+			});
+		});
+
+		it('should error with invalid data', function (done) {
+			socketTopics.loadMoreRecentTopics({uid: adminUid}, {after: 'invalid'}, function (err, data) {
+				assert.equal(err.message, '[[error:invalid-data]]');
+				done();
+			});
+		});
+
+
+		it('should load more recent topics', function (done) {
+			socketTopics.loadMoreRecentTopics({uid: adminUid}, {cid: topic.categoryId, after: 0}, function (err, data) {
+				assert.ifError(err);
+				assert(data);
+				assert(Array.isArray(data.topics));
+				done();
+			});
+		});
+
+		it('should error with invalid data', function (done) {
+			socketTopics.loadMoreFromSet({uid: adminUid}, {after: 'invalid'}, function (err, data) {
+				assert.equal(err.message, '[[error:invalid-data]]');
+				done();
+			});
+		});
+
+		it('should load more from custom set', function (done) {
+			socketTopics.loadMoreFromSet({uid: adminUid}, {set: 'uid:' + adminUid + ':topics', after: 0}, function (err, data) {
+				assert.ifError(err);
+				assert(data);
+				assert(Array.isArray(data.topics));
+				done();
+			});
+		});
+
+	});
+
+	describe('suggested topics', function () {
+		var tid1;
+		var tid2;
+		before(function (done) {
+			async.parallel({
+				topic1: function (next) {
+					topics.post({uid: adminUid, tags: ['nodebb'], title: 'topic title 1', content: 'topic 1 content', cid: topic.categoryId}, next);
+				},
+				topic2: function (next) {
+					topics.post({uid: adminUid, tags: ['nodebb'], title: 'topic title 2', content: 'topic 2 content', cid: topic.categoryId}, next);
+				}
+			}, function (err, results) {
+				assert.ifError(err);
+				tid1 = results.topic1.topicData.tid;
+				tid2 = results.topic2.topicData.tid;
+				done();
+			});
+		});
+
+		it('should return suggested topics', function (done) {
+			topics.getSuggestedTopics(tid1, adminUid, 0, -1, function (err, topics) {
+				assert.ifError(err);
+				assert(Array.isArray(topics));
+				done();
+			});
+		});
+	});
+
+	describe('unread', function () {
+		var socketTopics = require('../src/socket.io/topics');
+		var tid;
+		var mainPid;
+		var uid;
+		before(function (done) {
+			async.parallel({
+				topic: function (next) {
+					topics.post({uid: topic.userId, title: 'unread topic', content: 'unread topic content', cid: topic.categoryId}, next);
+				},
+				user: function (next) {
+					User.create({username: 'regularJoe'}, next);
+				}
+			}, function (err, results) {
+				assert.ifError(err);
+				tid = results.topic.topicData.tid;
+				mainPid = results.topic.postData.pid;
+				uid = results.user;
+				done();
+			});
+		});
+
+		it('should fail with invalid data', function (done) {
+			socketTopics.markUnread({uid: adminUid}, null, function (err) {
+				assert.equal(err.message, '[[error:invalid-data]]');
+				done();
+			});
+		});
+
+		it('should fail if topic does not exist', function (done) {
+			socketTopics.markUnread({uid: adminUid}, 1231082, function (err) {
+				assert.equal(err.message, '[[error:no-topic]]');
+				done();
+			});
+		});
+
+		it('should mark topic unread', function (done) {
+			socketTopics.markUnread({uid: adminUid}, tid, function (err) {
+				assert.ifError(err);
+				topics.hasReadTopic(tid, adminUid, function (err, hasRead) {
+					assert.ifError(err);
+					assert.equal(hasRead, false);
+					done();
+				});
+			});
+		});
+
+
+		it('should fail with invalid data', function (done) {
+			socketTopics.markAsRead({uid: 0}, null, function (err) {
+				assert.equal(err.message, '[[error:invalid-data]]');
+				done();
+			});
+		});
+
+
+		it('should mark topic read', function (done) {
+			socketTopics.markAsRead({uid: adminUid}, [tid], function (err) {
+				assert.ifError(err);
+				topics.hasReadTopic(tid, adminUid, function (err, hasRead) {
+					assert.ifError(err);
+					assert(hasRead);
+					done();
+				});
+			});
+		});
+
+		it('should fail with invalid data', function (done) {
+			socketTopics.markTopicNotificationsRead({uid: 0}, null, function (err) {
+				assert.equal(err.message, '[[error:invalid-data]]');
+				done();
+			});
+		});
+
+		it('should mark topic notifications read', function (done) {
+			var socketPosts = require('../src/socket.io/posts');
+
+			async.waterfall([
+				function (next) {
+					socketTopics.follow({uid: adminUid}, tid, next);
+				},
+				function (next) {
+					socketPosts.reply({uid: uid}, {content: 'some content', tid: tid}, next);
+				},
+				function (data, next) {
+					setTimeout(next, 2500);
+				},
+				function (next) {
+					User.notifications.getUnreadCount(adminUid, next);
+				},
+				function (count, next) {
+					assert.equal(count, 1);
+					socketTopics.markTopicNotificationsRead({uid: adminUid}, [tid], next);
+				},
+				function (next) {
+					User.notifications.getUnreadCount(adminUid, next);
+				},
+				function (count, next) {
+					assert.equal(count, 0);
+					next();
+				}
+			], function (err) {
+				assert.ifError(err);
+				done();
+			});
+		});
+
+		it('should fail with invalid data', function (done) {
+			socketTopics.markAllRead({uid: 0}, null, function (err) {
+				assert.equal(err.message, '[[error:invalid-uid]]');
+				done();
+			});
+		});
+
+		it('should mark all read', function (done) {
+			socketTopics.markUnread({uid: adminUid}, tid, function (err) {
+				assert.ifError(err);
+				socketTopics.markAllRead({uid: adminUid}, {}, function (err) {
+					assert.ifError(err);
+					topics.hasReadTopic(tid, adminUid, function (err, hasRead) {
+						assert.ifError(err);
+						assert(hasRead);
+						done();
+					});
+				});
+			});
+		});
+
+		it('should mark all read', function (done) {
+			socketTopics.markUnread({uid: adminUid}, tid, function (err) {
+				assert.ifError(err);
+				socketTopics.markCategoryTopicsRead({uid: adminUid}, topic.categoryId, function (err) {
+					assert.ifError(err);
+					topics.hasReadTopic(tid, adminUid, function (err, hasRead) {
+						assert.ifError(err);
+						assert(hasRead);
+						done();
+					});
+				});
+			});
+		});
+
+
+		it('should fail with invalid data', function (done) {
+			socketTopics.markAsUnreadForAll({uid: adminUid}, null, function (err) {
+				assert.equal(err.message, '[[error:invalid-tid]]');
+				done();
+			});
+		});
+
+		it('should fail with invalid data', function (done) {
+			socketTopics.markAsUnreadForAll({uid: 0}, [tid], function (err) {
+				assert.equal(err.message, '[[error:no-privileges]]');
+				done();
+			});
+		});
+
+		it('should fail if user is not admin', function (done) {
+			socketTopics.markAsUnreadForAll({uid: uid}, [tid], function (err) {
+				assert.equal(err.message, '[[error:no-privileges]]');
+				done();
+			});
+		});
+
+		it('should fail if topic does not exist', function (done) {
+			socketTopics.markAsUnreadForAll({uid: uid}, [12312313], function (err) {
+				assert.equal(err.message, '[[error:no-topic]]');
+				done();
+			});
+		});
+
+		it('should mark topic unread for everyone', function (done) {
+			socketTopics.markAsUnreadForAll({uid: adminUid}, [tid], function (err) {
+				assert.ifError(err);
+				async.parallel({
+					adminRead: function (next) {
+						topics.hasReadTopic(tid, adminUid, next);
+					},
+					regularRead: function (next) {
+						topics.hasReadTopic(tid, uid, next);
+					}
+				}, function (err, results) {
+					assert.ifError(err);
+					assert.equal(results.adminRead, false);
+					assert.equal(results.regularRead, false);
+					done();
+				});
+			});
+		});
+
+
+
+
+	});
+
 
 	after(function (done) {
 		db.emptydb(done);

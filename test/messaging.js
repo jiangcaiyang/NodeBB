@@ -12,16 +12,18 @@ var Groups = require('../src/groups');
 var Messaging = require('../src/messaging');
 var helpers = require('./helpers');
 
+
 describe('Messaging Library', function () {
-	var testUids;
+	//var testUids;
 	var fooUid;
 	var bazUid;
 	var herpUid;
 	var roomId;
 
 	before(function (done) {
+		Groups.resetCache();
 		// Create 3 users: 1 admin, 2 regular
-		async.parallel([
+		async.series([
 			async.apply(User.create, { username: 'foo', password: 'barbar' }),	// admin
 			async.apply(User.create, { username: 'baz', password: 'quuxquux' }),	// restricted user
 			async.apply(User.create, { username: 'herp', password: 'derpderp' })	// regular user
@@ -30,36 +32,29 @@ describe('Messaging Library', function () {
 				return done(err);
 			}
 
-			testUids = uids;
 			fooUid = uids[0];
 			bazUid = uids[1];
 			herpUid = uids[2];
 
 			async.parallel([
-				async.apply(Groups.join, 'administrators', uids[0]),
-				async.apply(User.setSetting, testUids[1], 'restrictChat', '1')
+				async.apply(Groups.join, 'administrators', fooUid),
+				async.apply(User.setSetting, bazUid, 'restrictChat', '1')
 			], done);
 		});
 	});
 
 	describe('.canMessage()', function () {
-		it('should not error out', function (done) {
-			Messaging.canMessageUser(testUids[1], testUids[2], function (err) {
-				assert.ifError(err);
-				done();
-			});
-		});
-
 		it('should allow messages to be sent to an unrestricted user', function (done) {
-			Messaging.canMessageUser(testUids[1], testUids[2], function (err) {
+			Messaging.canMessageUser(bazUid, herpUid, function (err) {
 				assert.ifError(err);
 				done();
 			});
 		});
 
 		it('should NOT allow messages to be sent to a restricted user', function (done) {
-			User.setSetting(testUids[1], 'restrictChat', '1', function () {
-				Messaging.canMessageUser(testUids[2], testUids[1], function (err) {
+			User.setSetting(bazUid, 'restrictChat', '1', function (err) {
+				assert.ifError(err);
+				Messaging.canMessageUser(herpUid, bazUid, function (err) {
 					assert.strictEqual(err.message, '[[error:chat-restricted]]');
 					done();
 				});
@@ -67,15 +62,15 @@ describe('Messaging Library', function () {
 		});
 
 		it('should always allow admins through', function (done) {
-			Messaging.canMessageUser(testUids[0], testUids[1], function (err) {
+			Messaging.canMessageUser(fooUid, bazUid, function (err) {
 				assert.ifError(err);
 				done();
 			});
 		});
 
 		it('should allow messages to be sent to a restricted user if restricted user follows sender', function (done) {
-			User.follow(testUids[1], testUids[2], function () {
-				Messaging.canMessageUser(testUids[2], testUids[1], function (err) {
+			User.follow(bazUid, herpUid, function () {
+				Messaging.canMessageUser(herpUid, bazUid, function (err) {
 					assert.ifError(err);
 					done();
 				});
@@ -84,8 +79,9 @@ describe('Messaging Library', function () {
 	});
 
 	describe('rooms', function () {
+		var socketModules = require('../src/socket.io/modules');
 		it('should create a new chat room', function (done) {
-			Messaging.newRoom(fooUid, [bazUid, herpUid], function (err, _roomId) {
+			socketModules.chats.newRoom({uid: fooUid}, {touid: bazUid}, function (err, _roomId) {
 				roomId = _roomId;
 				assert.ifError(err);
 				assert(roomId);
@@ -93,8 +89,15 @@ describe('Messaging Library', function () {
 			});
 		});
 
+		it('should add a user to room', function (done) {
+			socketModules.chats.addUserToRoom({uid: fooUid}, {roomId: roomId, username: 'herp'}, function (err) {
+				assert.ifError(err);
+				done();
+			});
+		});
+
 		it('should leave the chat room', function (done) {
-			Messaging.leaveRoom([bazUid], roomId, function (err) {
+			socketModules.chats.leave({uid: bazUid}, roomId, function (err) {
 				assert.ifError(err);
 				Messaging.isUserInRoom(bazUid, roomId, function (err, isUserInRoom) {
 					assert.ifError(err);
@@ -105,28 +108,96 @@ describe('Messaging Library', function () {
 		});
 
 		it('should send a message to a room', function (done) {
-			Messaging.sendMessage(fooUid, roomId, 'first chat message', Date.now(), function (err, messageData) {
+			socketModules.chats.send({uid: fooUid}, {roomId: roomId, message: 'first chat message'}, function (err, messageData) {
 				assert.ifError(err);
 				assert(messageData);
 				assert.equal(messageData.content, 'first chat message');
 				assert(messageData.fromUser);
 				assert(messageData.roomId, roomId);
-				done();
+				socketModules.chats.getRaw({uid: fooUid}, {roomId: roomId, mid: messageData.mid}, function (err, raw) {
+					assert.ifError(err);
+					assert.equal(raw, 'first chat message');
+					done();
+				});
 			});
 		});
 
 		it('should get messages from room', function (done) {
-			Messaging.getMessages({
-				callerUid: fooUid,
+			socketModules.chats.getMessages({uid: fooUid}, {
 				uid: fooUid,
 				roomId: roomId,
-				markRead: true
+				start: 0
 			}, function (err, messages) {
 				assert.ifError(err);
 				assert(Array.isArray(messages));
 				assert.equal(messages[0].roomId, roomId);
 				assert.equal(messages[0].fromuid, fooUid);
 				done();
+			});
+		});
+
+		it('should mark room read', function (done) {
+			socketModules.chats.markRead({uid: fooUid}, roomId, function (err) {
+				assert.ifError(err);
+				done();
+			});
+		});
+
+		it('should mark all rooms read', function (done) {
+			socketModules.chats.markAllRead({uid: fooUid}, {}, function (err) {
+				assert.ifError(err);
+				done();
+			});
+		});
+
+		it('should rename room', function (done) {
+			socketModules.chats.renameRoom({uid: fooUid}, {roomId: roomId, newName: 'new room name'}, function (err) {
+				assert.ifError(err);
+
+				done();
+			});
+		});
+
+		it('should load chat room', function (done) {
+			socketModules.chats.loadRoom({uid: fooUid}, {roomId: roomId}, function (err, data) {
+				assert.ifError(err);
+				assert(data);
+				assert.equal(data.roomName, 'new room name');
+				done();
+			});
+		});
+	});
+
+	describe('edit/delete', function () {
+		var socketModules = require('../src/socket.io/modules');
+		var mid;
+		before(function (done) {
+			socketModules.chats.send({uid: fooUid}, {roomId: roomId, message: 'first chat message'}, function (err, messageData) {
+				assert.ifError(err);
+				mid = messageData.mid;
+				done();
+			});
+		});
+
+		it('should edit message', function (done) {
+			socketModules.chats.edit({uid: fooUid}, {mid: mid, roomId: roomId, message: 'message edited'}, function (err) {
+				assert.ifError(err);
+				socketModules.chats.getRaw({uid: fooUid}, {roomId: roomId, mid: mid}, function (err, raw) {
+					assert.ifError(err);
+					assert.equal(raw, 'message edited');
+					done();
+				});
+			});
+		});
+
+		it('should delete message', function (done) {
+			socketModules.chats.delete({uid: fooUid}, {messageId: mid, roomId: roomId}, function (err) {
+				assert.ifError(err);
+				db.exists('message:' + mid, function (err, exists) {
+					assert.ifError(err);
+					assert(!exists);
+					done();
+				});
 			});
 		});
 	});

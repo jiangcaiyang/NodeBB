@@ -9,6 +9,7 @@ var db = require('../database');
 var user = require('../user');
 var posts = require('../posts');
 var meta = require('../meta');
+var plugins = require('../plugins');
 
 module.exports = function (Topics) {
 
@@ -133,7 +134,12 @@ module.exports = function (Topics) {
 				}
 			});
 
-			callback(null, postData);
+			plugins.fireHook('filter:topics.addPostData', {
+				posts: postData,
+				uid: uid
+			}, function (err, data) {
+				callback(err, data ? data.posts : null);
+			});
 		});
 	};
 
@@ -148,12 +154,7 @@ module.exports = function (Topics) {
 				post.display_post_menu = topicPrivileges.isAdminOrMod || (post.selfPost && !topicData.locked) || ((loggedIn || topicData.postSharing.length) && !post.deleted);
 				post.ip = topicPrivileges.isAdminOrMod ? post.ip : undefined;
 
-				if (post.deleted && !(topicPrivileges.isAdminOrMod || post.selfPost)) {
-					post.content = '[[topic:post_is_deleted]]';
-					if (post.user) {
-						post.user.signature = '';
-					}
-				}
+				posts.modifyPostByPrivilege(post, topicPrivileges.isAdminOrMod);
 			}
 		});
 	};

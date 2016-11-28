@@ -1,14 +1,17 @@
 'use strict';
 
-var	assert = require('assert');
+var assert = require('assert');
 var async = require('async');
-var db = require('./mocks/databasemock');
+var nconf = require('nconf');
+var request = require('request');
 
+var db = require('./mocks/databasemock');
 var User = require('../src/user');
 var Topics = require('../src/topics');
 var Categories = require('../src/categories');
 var Meta = require('../src/meta');
 var Password = require('../src/password');
+var groups = require('../src/groups');
 var helpers = require('./helpers');
 
 describe('User', function () {
@@ -17,7 +20,7 @@ describe('User', function () {
 	var testCid;
 
 	before(function (done) {
-		var groups = require('../src/groups');
+
 		groups.resetCache();
 
 		Categories.create({
@@ -428,7 +431,188 @@ describe('User', function () {
 				});
 			});
 		});
+
+		it('should set user status', function (done) {
+			io.emit('user.setStatus', 'away', function (err, data) {
+				assert.ifError(err);
+				assert.equal(data.uid, uid);
+				assert.equal(data.status, 'away');
+				done();
+			});
+		});
+
+		it('should fail for invalid status', function (done) {
+			io.emit('user.setStatus', '12345', function (err) {
+				assert.equal(err.message, '[[error:invalid-user-status]]');
+				done();
+			});
+		});
+
+		it('should get user status', function (done) {
+			io.emit('user.checkStatus', uid, function (err, status) {
+				assert.ifError(err);
+				assert.equal(status, 'away');
+				done();
+			});
+		});
+
+		it('should change user picture', function (done) {
+			io.emit('user.changePicture', {type: 'default', uid: uid}, function (err) {
+				assert.ifError(err);
+				User.getUserField(uid, 'picture', function (err, picture) {
+					assert.ifError(err);
+					assert.equal(picture, '');
+					done();
+				});
+			});
+		});
+
+		it('should upload profile picture', function (done) {
+			var path = require('path');
+			var picture = {
+				path: path.join(nconf.get('base_dir'), 'public', 'logo.png'),
+				size: 7189,
+				name: 'logo.png'
+			};
+			User.uploadPicture(uid, picture, function (err, uploadedPicture) {
+				assert.ifError(err);
+				assert.equal(uploadedPicture.url, '/uploads/profile/' + uid + '-profileimg.png');
+				assert.equal(uploadedPicture.path, path.join(nconf.get('base_dir'), 'public', 'uploads', 'profile', uid + '-profileimg.png'));
+				done();
+			});
+		});
+
+		it('should get profile pictures', function (done) {
+			io.emit('user.getProfilePictures', {uid: uid}, function (err, data) {
+				assert.ifError(err);
+				assert(data);
+				assert(Array.isArray(data));
+				assert.equal(data[0].type, 'uploaded');
+				assert.equal(data[0].text, '[[user:uploaded_picture]]');
+				done();
+			});
+		});
+
+		it('should remove uploaded picture', function (done) {
+			io.emit('user.removeUploadedPicture', {uid: uid}, function (err) {
+				assert.ifError(err);
+				User.getUserField(uid, 'uploadedpicture', function (err, uploadedpicture) {
+					assert.ifError(err);
+					assert.equal(uploadedpicture, '');
+					done();
+				});
+			});
+		});
+
+		it('should load profile page', function (done) {
+			request(nconf.get('url') + '/api/user/updatedagain', {jar: jar, json: true}, function (err, res, body) {
+				assert.ifError(err);
+				assert.equal(res.statusCode, 200);
+				assert(body);
+				done();
+			});
+		});
+
+		it('should load settings page', function (done) {
+			request(nconf.get('url') + '/api/user/updatedagain/settings', {jar: jar, json: true}, function (err, res, body) {
+				assert.ifError(err);
+				assert.equal(res.statusCode, 200);
+				assert(body.settings);
+				assert(body.languages);
+				assert(body.homePageRoutes);
+				done();
+			});
+		});
+
+		it('should load edit page', function (done) {
+			request(nconf.get('url') + '/api/user/updatedagain/edit', {jar: jar, json: true}, function (err, res, body) {
+				assert.ifError(err);
+				assert.equal(res.statusCode, 200);
+				assert(body);
+				done();
+			});
+		});
+
+		it('should load edit/email page', function (done) {
+			request(nconf.get('url') + '/api/user/updatedagain/edit/email', {jar: jar, json: true}, function (err, res, body) {
+				assert.ifError(err);
+				assert.equal(res.statusCode, 200);
+				assert(body);
+				done();
+			});
+		});
+
+		it('should load user\'s groups page', function (done) {
+			groups.create({
+				name: 'Test',
+				description: 'Foobar!'
+			}, function (err) {
+				assert.ifError(err);
+				groups.join('Test', uid, function (err) {
+					assert.ifError(err);
+					request(nconf.get('url') + '/api/user/updatedagain/groups', {jar: jar, json: true}, function (err, res, body) {
+						assert.ifError(err);
+						assert.equal(res.statusCode, 200);
+						assert(Array.isArray(body.groups));
+						assert.equal(body.groups[0].name, 'Test');
+						done();
+					});
+				});
+			});
+
+		});
 	});
+
+	describe('.getModerationHistory', function () {
+		it('should return the correct ban reason', function (done) {
+			async.series([
+				function (next) {
+					User.ban(testUid, 0, '', function (err) {
+						assert.ifError(err);
+						next(err);
+					});
+				},
+				function (next) {
+					User.getModerationHistory(testUid, function (err, data) {
+						assert.ifError(err);
+						assert.equal(data.bans.length, 1, 'one ban');
+						assert.equal(data.bans[0].reason, '[[user:info.banned-no-reason]]', 'no ban reason');
+
+						next(err);
+					});
+				}
+			], function (err) {
+				assert.ifError(err);
+				User.unban(testUid, function (err) {
+					assert.ifError(err);
+					done();
+				});
+			});
+		});
+	});
+
+	describe('digests', function () {
+		var uid;
+		before(function (done) {
+			User.create({username: 'digestuser', email: 'test@example.com'}, function (err, _uid) {
+				assert.ifError(err);
+				uid = _uid;
+				done();
+			});
+		});
+
+		it('should send digests', function (done) {
+			User.updateDigestSetting(uid, 'day', function (err) {
+				assert.ifError(err);
+					User.digest.execute('day', function (err) {
+					assert.ifError(err);
+					done();
+				});
+			});
+		});
+
+	});
+
 
 	after(function (done) {
 		db.emptydb(done);

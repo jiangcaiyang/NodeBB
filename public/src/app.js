@@ -23,6 +23,8 @@ app.cacheBuster = null;
 	app.load = function () {
 		app.loadProgressiveStylesheet();
 
+		overrides.overrideTimeago();
+
 		var url = ajaxify.start(window.location.pathname.slice(1) + window.location.search + window.location.hash);
 		ajaxify.updateHistory(url, true);
 		ajaxify.parseData();
@@ -52,9 +54,9 @@ app.cacheBuster = null;
 		});
 
 		overrides.overrideBootbox();
-		overrides.overrideTimeago();
 		createHeaderTooltips();
 		app.showEmailConfirmWarning();
+		app.showCookieWarning();
 
 		socket.removeAllListeners('event:nodebb.ready');
 		socket.on('event:nodebb.ready', function (data) {
@@ -87,6 +89,14 @@ app.cacheBuster = null;
 
 	app.logout = function () {
 		$(window).trigger('action:app.logout');
+
+		/*
+			Set session refresh flag (otherwise the session check will trip and throw invalid session modal)
+			We know the session is/will be invalid (uid mismatch) because the user is logging out
+		*/
+		app.flags = app.flags || {};
+		app.flags._sessionRefresh = true;
+
 		$.ajax(config.relative_path + '/logout', {
 			type: 'POST',
 			headers: {
@@ -125,6 +135,8 @@ app.cacheBuster = null;
 	};
 
 	app.alertError = function (message, timeout) {
+		message = message.message || message;
+
 		if (message === '[[error:invalid-session]]') {
 			return app.handleInvalidSession();
 		}
@@ -287,20 +299,16 @@ app.cacheBuster = null;
 
 		if (showWelcomeMessage) {
 			showWelcomeMessage = false;
-			if (document.readyState !== 'complete') {
-				$(document).ready(showAlert.bind(null, 'login'));
-			} else {
+			$(document).ready(function () {
 				showAlert('login');
-			}
+			});
 		}
 
 		if (showBannedMessage) {
 			showBannedMessage = false;
-			if (document.readyState !== 'complete') {
-				$(document).ready(showAlert.bind(null, 'banned'));
-			} else {
+			$(document).ready(function () {
 				showAlert('banned');
-			}
+			});
 		}
 	};
 
@@ -621,5 +629,35 @@ app.cacheBuster = null;
 		linkEl.href = config.relative_path + '/js-enabled.css';
 
 		document.head.appendChild(linkEl);
+	};
+
+	app.showCookieWarning = function () {
+		if (!config.cookies.enabled) {
+			// Only show warning if enabled (obviously)
+			return;
+		} else if (window.location.pathname.startsWith(config.relative_path + '/admin')) {
+			// No need to show cookie consent warning in ACP
+			return;
+		} else if (window.localStorage.getItem('cookieconsent') === '1') {
+			return;
+		}
+		require(['translator'], function (translator) {
+			config.cookies.message = translator.unescape(config.cookies.message);
+			config.cookies.dismiss = translator.unescape(config.cookies.dismiss);
+			config.cookies.link = translator.unescape(config.cookies.link);
+
+			app.parseAndTranslate('partials/cookie-consent', config.cookies, function (html) {
+				$(document.body).append(html);
+
+				var warningEl = $('.cookie-consent');
+				var dismissEl = warningEl.find('button');
+				dismissEl.on('click', function () {
+					// Save consent cookie and remove warning element
+					window.localStorage.setItem('cookieconsent', '1');
+					warningEl.remove();
+				});
+			});
+		});
+
 	};
 }());

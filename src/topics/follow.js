@@ -74,7 +74,10 @@ module.exports = function (Topics) {
 			function (next) {
 				method2(tid, uid, next);
 			},
-			async.apply(plugins.fireHook, hook, {uid: uid, tid: tid})
+			function (next) {
+				plugins.fireHook(hook, {uid: uid, tid: tid});
+				next();
+			}
 		], callback);
 	}
 
@@ -157,6 +160,30 @@ module.exports = function (Topics) {
 				next(null, readingUids);
 			}
 		], callback);
+	};
+
+	Topics.filterWatchedTids = function (tids, uid, callback) {
+		db.sortedSetScores('uid:' + uid + ':followed_tids', tids, function (err, scores) {
+			if (err) {
+				return callback(err);
+			}
+			tids = tids.filter(function (tid, index) {
+				return tid && !!scores[index];
+			});
+			callback(null, tids);
+		});
+	};
+
+	Topics.filterNotIgnoredTids = function (tids, uid, callback) {
+		db.sortedSetScores('uid:' + uid + ':ignored_tids', tids, function (err, scores) {
+			if (err) {
+				return callback(err);
+			}
+			tids = tids.filter(function (tid, index) {
+				return tid && !scores[index];
+			});
+			callback(null, tids);
+		});
 	};
 
 	Topics.notifyFollowers = function (postData, exceptUid, callback) {

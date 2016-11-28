@@ -16,6 +16,10 @@ module.exports = function (User) {
 		async.waterfall([
 			async.apply(db.getSortedSetRevRangeWithScores, 'uid:' + uid + ':bans', 0, 0),
 			function (record, next) {
+				if (!record.length) {
+					return next(new Error('no-ban-info'));
+				}
+
 				timestamp = record[0].score;
 				expiry = record[0].value;
 
@@ -123,7 +127,7 @@ module.exports = function (User) {
 			banObj.timestamp = parseInt(banObj.score, 10);
 			banObj.timestampReadable = new Date(banObj.score).toString();
 			banObj.timestampISO = new Date(banObj.score).toISOString();
-			banObj.reason = validator.escape(String(reasons[banObj.score])) || '[[user:info.banned-no-reason]]';
+			banObj.reason = validator.escape(String(reasons[banObj.score] || '')) || '[[user:info.banned-no-reason]]';
 
 			delete banObj.value;
 			delete banObj.score;
