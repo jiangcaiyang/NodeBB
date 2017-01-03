@@ -54,3 +54,8 @@ tx.exe
 
 ##Coverage output
 coverage
+
+## Local uploads
+/public/uploads/
+# qtdream player
+/public/qtdream-player/
