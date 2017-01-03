@@ -45,8 +45,6 @@ describe('Topic\'s', function () {
 				done();
 			});
 		});
-
-
 	});
 
 	describe('.post', function () {
@@ -149,6 +147,13 @@ describe('Topic\'s', function () {
 		it('should fail to create new reply with invalid topic id', function (done) {
 			topics.reply({uid: null, content: 'test post', tid: 99}, function (err) {
 				assert.equal(err.message, '[[error:no-topic]]');
+				done();
+			});
+		});
+
+		it('should fail to create new reply with invalid toPid', function (done) {
+			topics.reply({uid: topic.userId, content: 'test post', tid: newTopic.tid, toPid: '"onmouseover=alert(1);//'}, function (err) {
+				assert.equal(err.message, '[[error:invalid-pid]]');
 				done();
 			});
 		});
@@ -354,6 +359,98 @@ describe('Topic\'s', function () {
 			});
 		});
 	});
+
+	describe('order pinned topics', function () {
+		var tid1;
+		var tid2;
+		var tid3;
+		before(function (done) {
+			function createTopic(callback) {
+				topics.post({
+					uid: topic.userId,
+					title: 'topic for test',
+					content: 'topic content',
+					cid: topic.categoryId
+				}, callback);
+			}
+			async.series({
+				topic1: function (next) {
+					createTopic(next);
+				},
+				topic2: function (next) {
+					createTopic(next);
+				},
+				topic3: function (next) {
+					createTopic(next);
+				}
+			}, function (err, results) {
+				assert.ifError(err);
+				tid1 = results.topic1.topicData.tid;
+				tid2 = results.topic2.topicData.tid;
+				tid3 = results.topic3.topicData.tid;
+				async.series([
+					function (next) {
+						topics.tools.pin(tid1, adminUid, next);
+					},
+					function (next) {
+						topics.tools.pin(tid2, adminUid, next);
+					}
+				], done);
+			});
+		});
+
+		var socketTopics = require('../src/socket.io/topics');
+		it('should error with invalid data', function (done) {
+			socketTopics.orderPinnedTopics({uid: adminUid}, null, function (err) {
+				assert.equal(err.message, '[[error:invalid-data]]');
+				done();
+			});
+		});
+
+		it('should error with invalid data', function (done) {
+			socketTopics.orderPinnedTopics({uid: adminUid}, [null, null], function (err) {
+				assert.equal(err.message, '[[error:invalid-data]]');
+				done();
+			});
+		});
+
+		it('should error with unprivileged user', function (done) {
+			socketTopics.orderPinnedTopics({uid: 0}, [{tid: tid1}, {tid: tid2}], function (err) {
+				assert.equal(err.message, '[[error:no-privileges]]');
+				done();
+			});
+		});
+
+		it('should not do anything if topics are not pinned', function (done) {
+			socketTopics.orderPinnedTopics({uid: adminUid}, [{tid: tid3}], function (err) {
+				assert.ifError(err);
+				db.isSortedSetMember('cid:' + topic.categoryId + ':tids:pinned', tid3, function (err, isMember) {
+					assert.ifError(err);
+					assert(!isMember);
+					done();
+				});
+			});
+		});
+
+		it('should order pinned topics', function (done) {
+			db.getSortedSetRevRange('cid:' + topic.categoryId + ':tids:pinned', 0, -1, function (err, pinnedTids) {
+				assert.ifError(err);
+				assert.equal(pinnedTids[0], tid2);
+				assert.equal(pinnedTids[1], tid1);
+				socketTopics.orderPinnedTopics({uid: adminUid}, [{tid: tid1, order: 1}, {tid: tid2, order: 0}], function (err) {
+					assert.ifError(err);
+					db.getSortedSetRevRange('cid:' + topic.categoryId + ':tids:pinned', 0, -1, function (err, pinnedTids) {
+						assert.ifError(err);
+						assert.equal(pinnedTids[0], tid1);
+						assert.equal(pinnedTids[1], tid2);
+						done();
+					});
+				});			
+			});
+		});
+
+	});
+
 
 	describe('.ignore', function () {
 		var newTid;
@@ -602,7 +699,7 @@ describe('Topic\'s', function () {
 		});
 
 		it('should error with invalid data', function (done) {
-			socketTopics.loadMoreUnreadTopics({uid: adminUid}, {after: 'invalid'}, function (err, data) {
+			socketTopics.loadMoreUnreadTopics({uid: adminUid}, {after: 'invalid'}, function (err) {
 				assert.equal(err.message, '[[error:invalid-data]]');
 				done();
 			});
@@ -621,7 +718,7 @@ describe('Topic\'s', function () {
 		});
 
 		it('should error with invalid data', function (done) {
-			socketTopics.loadMoreRecentTopics({uid: adminUid}, {after: 'invalid'}, function (err, data) {
+			socketTopics.loadMoreRecentTopics({uid: adminUid}, {after: 'invalid'}, function (err) {
 				assert.equal(err.message, '[[error:invalid-data]]');
 				done();
 			});
@@ -638,7 +735,7 @@ describe('Topic\'s', function () {
 		});
 
 		it('should error with invalid data', function (done) {
-			socketTopics.loadMoreFromSet({uid: adminUid}, {after: 'invalid'}, function (err, data) {
+			socketTopics.loadMoreFromSet({uid: adminUid}, {after: 'invalid'}, function (err) {
 				assert.equal(err.message, '[[error:invalid-data]]');
 				done();
 			});
@@ -872,8 +969,234 @@ describe('Topic\'s', function () {
 				});
 			});
 		});
+	});
 
+	describe('tags', function () {
+		var socketTopics = require('../src/socket.io/topics');
+		var socketAdmin = require('../src/socket.io/admin');
 
+		before(function (done) {
+			async.parallel({
+				topic1: function (next) {
+					topics.post({uid: adminUid, tags: ['php', 'nosql', 'psql', 'nodebb'], title: 'topic title 1', content: 'topic 1 content', cid: topic.categoryId}, next);
+				},
+				topic2: function (next) {
+					topics.post({uid: adminUid, tags: ['javascript', 'mysql', 'python', 'nodejs'], title: 'topic title 2', content: 'topic 2 content', cid: topic.categoryId}, next);
+				}
+			}, function (err) {
+				assert.ifError(err);
+				done();
+			});
+		});
+
+		it('should return empty array if query is falsy', function (done) {
+			socketTopics.autocompleteTags({uid: adminUid}, {query: ''}, function (err, data) {
+				assert.ifError(err);
+				assert.deepEqual([], data);
+				done();
+			});
+		});
+
+		it('should autocomplete tags', function (done) {
+			socketTopics.autocompleteTags({uid: adminUid}, {query: 'p'}, function (err, data) {
+				assert.ifError(err);
+				['php', 'psql', 'python'].forEach(function (tag) {
+					assert.notEqual(data.indexOf(tag), -1);
+				});
+				done();
+			});
+		});
+
+		it('should return empty array if query is falsy', function (done) {
+			socketTopics.searchTags({uid: adminUid}, {query: ''}, function (err, data) {
+				assert.ifError(err);
+				assert.deepEqual([], data);
+				done();
+			});
+		});
+
+		it('should search tags', function (done) {
+			socketTopics.searchTags({uid: adminUid}, {query: 'no'}, function (err, data) {
+				assert.ifError(err);
+				['nodebb', 'nodejs', 'nosql'].forEach(function (tag) {
+					assert.notEqual(data.indexOf(tag), -1);
+				});
+				done();
+			});
+		});
+
+		it('should return empty array if query is falsy', function (done) {
+			socketTopics.searchAndLoadTags({uid: adminUid}, {query: ''}, function (err, data) {
+				assert.ifError(err);
+				assert.equal(data.matchCount, 0);
+				assert.equal(data.pageCount, 1);
+				assert.deepEqual(data.tags, []);
+				done();
+			});
+		});
+
+		it('should search and load tags', function (done) {
+			socketTopics.searchAndLoadTags({uid: adminUid}, {query: 'no'}, function (err, data) {
+				assert.ifError(err);
+				assert.equal(data.matchCount, 3);
+				assert.equal(data.pageCount, 1);
+				var tagData = [
+					{ value: 'nodebb', color: '', bgColor: '', score: 3 },
+					{ value: 'nodejs', color: '', bgColor: '', score: 1 },
+					{ value: 'nosql', color: '', bgColor: '', score: 1 }
+				];
+				assert.deepEqual(data.tags, tagData);
+
+				done();
+			});
+		});
+
+		it('should return error if data is invalid', function (done) {
+			socketTopics.loadMoreTags({uid: adminUid}, {after: 'asd'}, function (err) {
+				assert.equal(err.message, '[[error:invalid-data]]');
+				done();
+			});
+		});
+
+		it('should load more tags', function (done) {
+			socketTopics.loadMoreTags({uid: adminUid}, {after: 0}, function (err, data) {
+				assert.ifError(err);
+				assert(Array.isArray(data.tags));
+				assert.equal(data.nextStart, 100);
+				done();
+			});
+		});
+
+		it('should error if data is invalid', function (done) {
+			socketAdmin.tags.create({uid: adminUid}, null, function (err) {
+				assert.equal(err.message, '[[error:invalid-data]]');
+				done();
+			});
+		});
+
+		it('should error if tag is invalid', function (done) {
+			socketAdmin.tags.create({uid: adminUid}, {tag: ''}, function (err) {
+				assert.equal(err.message, '[[error:invalid-tag]]');
+				done();
+			});
+		});
+
+		it('should error if tag is too short', function (done) {
+			socketAdmin.tags.create({uid: adminUid}, {tag: 'as'}, function (err) {
+				assert.equal(err.message, '[[error:tag-too-short]]');
+				done();
+			});
+		});
+
+		it('should create empty tag', function (done) {
+			socketAdmin.tags.create({uid: adminUid}, {tag: 'emptytag'}, function (err) {
+				assert.ifError(err);
+				db.sortedSetScore('tags:topic:count', 'emptytag', function (err, score) {
+					assert.ifError(err);
+					assert.equal(score, 0);
+					done();
+				});
+			});
+		});
+
+		it('should do nothing if tag exists', function (done) {
+			socketAdmin.tags.create({uid: adminUid}, {tag: 'emptytag'}, function (err) {
+				assert.ifError(err);
+				db.sortedSetScore('tags:topic:count', 'emptytag', function (err, score) {
+					assert.ifError(err);
+					assert.equal(score, 0);
+					done();
+				});
+			});
+		});
+
+		it('should error if data is invalid', function (done) {
+			socketAdmin.tags.update({uid: adminUid}, null, function (err) {
+				assert.equal(err.message, '[[error:invalid-data]]');
+				done();
+			});
+		});
+
+		it('should error if data.tag is invalid', function (done) {
+			socketAdmin.tags.update({uid: adminUid}, {
+				bgColor: '#ff0000',
+				color: '#00ff00'
+			}, function (err) {
+				assert.equal(err.message, '[[error:invalid-tag]]');
+				done();
+			});
+		});
+
+		it('should update tag', function (done) {
+			socketAdmin.tags.update({uid: adminUid}, {
+				tag: 'emptytag',
+				bgColor: '#ff0000',
+				color: '#00ff00'
+			}, function (err) {
+				assert.ifError(err);
+				db.getObject('tag:emptytag', function (err, data) {
+					assert.ifError(err);
+					assert.equal(data.bgColor, '#ff0000');
+					assert.equal(data.color, '#00ff00');
+					done();
+				});
+			});
+		});
+
+		it('should return related topics', function (done) {
+			var meta = require('../src/meta');
+			meta.config.maximumRelatedTopics = 2;
+			var topicData = {
+				tags: [{value: 'javascript'}]
+			};
+			topics.getRelatedTopics(topicData, 0, function (err, data) {
+				assert.ifError(err);
+				assert(Array.isArray(data));
+				assert.equal(data[0].title, 'topic title 2');
+				meta.config.maximumRelatedTopics = 0;
+				done();
+			});
+		});
+
+		it('should return error with invalid data', function (done) {
+			socketAdmin.tags.deleteTags({uid: adminUid}, null, function (err) {
+				assert.equal(err.message, '[[error:invalid-data]]');
+				done();
+			});
+		});
+
+		it('should do nothing if arrays is empty', function (done) {
+			socketAdmin.tags.deleteTags({uid: adminUid}, {tags: []}, function (err) {
+				assert.ifError(err);
+				done();
+			});
+		});
+
+		it('should delete tags', function (done) {
+			socketAdmin.tags.create({uid: adminUid}, {tag: 'emptytag2'}, function (err) {
+				assert.ifError(err);
+				socketAdmin.tags.deleteTags({uid: adminUid}, {tags: ['emptytag', 'emptytag2', 'nodebb', 'nodejs']}, function (err) {
+					assert.ifError(err);
+					db.getObjects(['tag:emptytag', 'tag:emptytag2'], function (err, data) {
+						assert.ifError(err);
+						assert(!data[0]);
+						assert(!data[1]);
+						done();
+					});
+				});
+			});
+		});
+
+		it('should delete tag', function (done) {
+			topics.deleteTag('javascript', function (err) {
+				assert.ifError(err);
+				db.getObject('tag:javascript', function (err, data) {
+					assert.ifError(err);
+					assert(!data);
+					done();
+				});
+			});
+		});
 
 
 	});

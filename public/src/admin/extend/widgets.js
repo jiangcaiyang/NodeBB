@@ -1,5 +1,5 @@
 "use strict";
-/* global define, app, socket */
+/* global define, app, socket, bootbox */
 
 define('admin/extend/widgets', ['jqueryui'], function (jqueryui) {
 	var Widgets = {};
@@ -54,13 +54,14 @@ define('admin/extend/widgets', ['jqueryui'], function (jqueryui) {
 
 		$('#widgets .widget-area').sortable({
 			update: function (event, ui) {
+				createDatePicker(ui.item);
 				appendToggle(ui.item);
 			},
 			connectWith: "div"
 		}).on('click', '.delete-widget', function () {
 			var panel = $(this).parents('.widget-panel');
 
-			bootbox.confirm('Are you sure you wish to delete this widget?', function (confirm) {
+			bootbox.confirm('[[admin/extend/widgets:alert.confirm-delete]]', function (confirm) {
 				if (confirm) {
 					panel.remove();
 				}
@@ -124,8 +125,8 @@ define('admin/extend/widgets', ['jqueryui'], function (jqueryui) {
 						app.alert({
 							alert_id: 'admin:widgets',
 							type: 'success',
-							title: 'Widgets Updated',
-							message: 'Successfully updated widgets',
+							title: '[[admin/extend/widgets:alert.updated]]',
+							message: '[[admin/extend/widgets:alert.update-success]]',
 							timeout: 2500
 						});
 					}
@@ -151,6 +152,15 @@ define('admin/extend/widgets', ['jqueryui'], function (jqueryui) {
 			container.attr('data-container-html', container.attr('data-container-html')
 				.replace(/class="[a-zA-Z0-9-\s]+"/, 'class="' + container[0].className.replace(' pointer ui-draggable', '') + '"')
 			);
+		});
+	}
+
+	function createDatePicker(el) {
+		var currentYear = new Date().getFullYear();
+		el.find('.date-selector').datepicker({
+			changeMonth: true,
+			changeYear: true,
+			yearRange: currentYear + ':' + (currentYear + 100)
 		});
 	}
 
@@ -209,6 +219,7 @@ define('admin/extend/widgets', ['jqueryui'], function (jqueryui) {
 
 					widgetArea.append(populateWidget(widgetEl, widgetData.data));
 					appendToggle(widgetEl);
+					createDatePicker(widgetEl);
 				}
 			}
 

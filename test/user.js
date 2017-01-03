@@ -13,6 +13,8 @@ var Meta = require('../src/meta');
 var Password = require('../src/password');
 var groups = require('../src/groups');
 var helpers = require('./helpers');
+var meta = require('../src/meta');
+var plugins = require('../src/plugins');
 
 describe('User', function () {
 	var userData;
@@ -170,11 +172,36 @@ describe('User', function () {
 	});
 
 	describe('.search()', function () {
+		var socketUser = require('../src/socket.io/user');
 		it('should return an object containing an array of matching users', function (done) {
 			User.search({query: 'john'}, function (err, searchData) {
 				assert.ifError(err);
 				assert.equal(Array.isArray(searchData.users) && searchData.users.length > 0, true);
 				assert.equal(searchData.users[0].username, 'John Smith');
+				done();
+			});
+		});
+
+		it('should search user', function (done) {
+			socketUser.search({uid: testUid}, {query: 'john'}, function (err, searchData) {
+				assert.ifError(err);
+				assert.equal(searchData.users[0].username, 'John Smith');
+				done();
+			});
+		});
+
+		it('should error for guest', function (done) {
+			Meta.config.allowGuestUserSearching = 0;
+			socketUser.search({uid: 0}, {query: 'john'}, function (err) {
+				assert.equal(err.message, '[[error:not-logged-in]]');
+				Meta.config.allowGuestUserSearching = 1;
+				done();
+			});
+		});
+
+		it('should error with invalid data', function (done) {
+			socketUser.search({uid: testUid}, null, function (err) {
+				assert.equal(err.message, '[[error:invalid-data]]');
 				done();
 			});
 		});
@@ -481,6 +508,106 @@ describe('User', function () {
 				done();
 			});
 		});
+		
+		it('should return error if profile image uploads disabled', function (done) {
+			meta.config.allowProfileImageUploads = 0;
+			var path = require('path');
+			var picture = {
+				path: path.join(nconf.get('base_dir'), 'public', 'logo.png'),
+				size: 7189,
+				name: 'logo.png'
+			};
+			User.uploadPicture(uid, picture, function (err, uploadedPicture) {
+				assert.equal(err.message, '[[error:profile-image-uploads-disabled]]');
+				done();
+			});
+		});
+		
+		it('should return error if profile image is too big', function (done) {
+			meta.config.allowProfileImageUploads = 1;
+			var path = require('path');
+			var picture = {
+				path: path.join(nconf.get('base_dir'), 'public', 'logo.png'),
+				size: 265000,
+				name: 'logo.png'
+			};
+			User.uploadPicture(uid, picture, function (err, uploadedPicture) {
+				assert.equal(err.message, '[[error:file-too-big, 256]]');
+				done();
+			});
+		});
+		
+		it('should return error if profile image file has no extension', function (done) {
+			var path = require('path');
+			var picture = {
+				path: path.join(nconf.get('base_dir'), 'public', 'logo.png'),
+				size: 7189,
+				name: 'logo'
+			};
+			User.uploadPicture(uid, picture, function (err, uploadedPicture) {
+				assert.equal(err.message, '[[error:invalid-image-extension]]');
+				done();
+			});
+		});
+		
+		it('should return error if no plugins listening for filter:uploadImage when uploading from url', function (done) {
+			var url = nconf.get('url') + '/logo.png';
+			User.uploadFromUrl(uid, url, function (err, uploadedPicture) {
+				assert.equal(err.message, '[[error:no-plugin]]');
+				done();
+			});
+		});
+		
+		it('should return error if the extension is invalid when uploading from url', function (done) {
+			var url = nconf.get('url') + '/favicon.ico';
+			
+			function filterMethod(data, callback) {
+				data.foo += 5;
+				callback(null, data);
+			}
+
+			plugins.registerHook('test-plugin', {hook: 'filter:uploadImage', method: filterMethod});
+		
+			User.uploadFromUrl(uid, url, function (err, uploadedPicture) {
+				assert.equal(err.message, '[[error:invalid-image-extension]]');
+				done();
+			});
+		});
+		
+		it('should return error if the file is too big when uploading from url', function (done) {
+			var url = nconf.get('url') + '/logo.png';
+			meta.config.maximumProfileImageSize = 1;
+			
+			function filterMethod(data, callback) {
+				data.foo += 5;
+				callback(null, data);
+			}
+
+			plugins.registerHook('test-plugin', {hook: 'filter:uploadImage', method: filterMethod});
+		
+			User.uploadFromUrl(uid, url, function (err, uploadedPicture) {
+				assert.equal(err.message, '[[error:file-too-big, ' + meta.config.maximumProfileImageSize + ']]');
+				done();
+			});
+		});
+		
+		it('should upload picture when uploading from url', function (done) {
+			var url = nconf.get('url') + '/logo.png';
+			meta.config.maximumProfileImageSize = '';
+			
+			function filterMethod(data, callback) {
+				data.foo += 5;
+				callback(null, {url: url});
+			}
+
+			plugins.registerHook('test-plugin', {hook: 'filter:uploadImage', method: filterMethod});
+		
+			User.uploadFromUrl(uid, url, function (err, uploadedPicture) {
+				assert.ifError(err);
+				assert.equal(uploadedPicture.url, url);
+				done();
+			});
+		});
 
 		it('should get profile pictures', function (done) {
 			io.emit('user.getProfilePictures', {uid: uid}, function (err, data) {
@@ -607,6 +734,247 @@ describe('User', function () {
 					User.digest.execute('day', function (err) {
 					assert.ifError(err);
 					done();
+				});
+			});
+		});
+	});
+
+	describe('socket methods', function () {
+		var socketUser = require('../src/socket.io/user');
+
+		it('should fail with invalid data', function (done) {
+			socketUser.exists({uid: testUid}, null, function (err) {
+				assert.equal(err.message, '[[error:invalid-data]]');
+				done();
+			});
+		});
+
+		it('should return true if user/group exists', function (done) {
+			socketUser.exists({uid: testUid}, {username: 'registered-users'}, function (err, exists) {
+				assert.ifError(err);
+				assert(exists);
+				done();
+			});
+		});
+
+		it('should return true if user/group exists', function (done) {
+			socketUser.exists({uid: testUid}, {username: 'John Smith'}, function (err, exists) {
+				assert.ifError(err);
+				assert(exists);
+				done();
+			});
+		});
+
+		it('should return false if user/group does not exists', function (done) {
+			socketUser.exists({uid: testUid}, {username: 'doesnot exist'}, function (err, exists) {
+				assert.ifError(err);
+				assert(!exists);
+				done();
+			});
+		});
+
+		it('should delete user', function (done) {
+			User.create({username: 'tobedeleted'}, function (err, _uid) {
+				assert.ifError(err);
+				socketUser.deleteAccount({uid: _uid}, {}, function (err) {
+					assert.ifError(err);
+					socketUser.exists({uid: testUid}, {username: 'doesnot exist'}, function (err, exists) {
+						assert.ifError(err);
+						assert(!exists);
+						done();
+					});
+				});
+			});
+		});
+
+		it('should fail if data is invalid', function (done) {
+			socketUser.emailExists({uid: testUid}, null, function (err) {
+				assert.equal(err.message, '[[error:invalid-data]]');
+				done();
+			});
+		});
+
+		it('should return true if email exists', function (done) {
+			socketUser.emailExists({uid: testUid}, {email: 'john@example.com'}, function (err, exists) {
+				assert.ifError(err);
+				assert(exists);
+				done();
+			});
+		});
+
+		it('should return false if email does not exist', function (done) {
+			socketUser.emailExists({uid: testUid}, {email: 'does@not.exist'}, function (err, exists) {
+				assert.ifError(err);
+				assert(!exists);
+				done();
+			});
+		});
+
+		it('should error if requireEmailConfirmation is disabled', function (done) {
+			socketUser.emailConfirm({uid: testUid}, {}, function (err) {
+				assert.equal(err.message, '[[error:email-confirmations-are-disabled]]');
+				done();
+			});
+		});
+
+		it('should send email confirm', function (done) {
+			Meta.config.requireEmailConfirmation = 1;
+			socketUser.emailConfirm({uid: testUid}, {}, function (err) {
+				assert.ifError(err);
+				Meta.config.requireEmailConfirmation = 0;
+				done();
+			});
+		});
+
+		it('should send reset email', function (done) {
+			socketUser.reset.send({uid: 0}, 'john@example.com', function (err) {
+				assert.ifError(err);
+				done();
+			});
+		});
+
+		it('should return invalid-data error', function (done) {
+			socketUser.reset.send({uid: 0}, null, function (err) {
+				assert.equal(err.message, '[[error:invalid-data]]');
+				done();
+			});
+		});
+
+		it('should not error', function (done) {
+			socketUser.reset.send({uid: 0}, 'doestnot@exist.com', function (err) {
+				assert.ifError(err);
+				done();
+			});
+		});
+
+		it('should commit reset', function (done) {
+			db.getObject('reset:uid', function (err, data) {
+				assert.ifError(err);
+				var code = Object.keys(data)[0];
+				socketUser.reset.commit({uid: 0}, {code: code, password: 'swordfish'}, function (err) {
+					assert.ifError(err);
+					done();
+				});
+			});
+		});
+
+		it('should save user settings', function (done) {
+			var data = {
+				uid: 1,
+				settings: {
+					bootswatchSkin: 'default',
+					homePageRoute: 'none',
+					homePageCustom: '',
+					openOutgoingLinksInNewTab: 0,
+					scrollToMyPost: 1,
+					delayImageLoading: 1,
+					userLang: 'en-GB',
+					usePagination: 1,
+					topicsPerPage: '10',
+					postsPerPage: '5',
+					showemail: 1,
+					showfullname: 1,
+					restrictChat: 0,
+					followTopicsOnCreate: 1,
+					followTopicsOnReply: 1,
+					notificationSound: '',
+					incomingChatSound: '',
+					outgoingChatSound: ''
+				}
+			};
+			socketUser.saveSettings({uid: testUid}, data, function (err) {
+				assert.ifError(err);
+				done();
+			});
+		});
+
+		it('should set moderation note', function (done) {
+			User.create({username: 'noteadmin'}, function (err, adminUid) {
+				assert.ifError(err);
+				groups.join('administrators', adminUid, function (err) {
+					assert.ifError(err);
+					socketUser.setModerationNote({uid: adminUid}, {uid: testUid, note: 'this is a test user'}, function (err) {
+						assert.ifError(err);
+						User.getUserField(testUid, 'moderationNote', function (err, note) {
+							assert.ifError(err);
+							assert.equal(note, 'this is a test user');
+							done();
+						});
+					});
+				});
+			});
+
+		});
+	});
+
+	describe('approval queue', function () {
+		var socketAdmin = require('../src/socket.io/admin');
+
+		var oldRegistrationType;
+		var adminUid;
+		before(function (done) {
+			oldRegistrationType = Meta.config.registrationType;
+			Meta.config.registrationType = 'admin-approval';
+			User.create({username: 'admin', password: '123456'}, function (err, uid) {
+				assert.ifError(err);
+				adminUid = uid;
+				groups.join('administrators', uid, done);
+			});
+		});
+
+		after(function (done) {
+			Meta.config.registrationType = oldRegistrationType;
+			done();
+		});
+
+		it('should add user to approval queue', function (done) {
+			helpers.registerUser({
+				username: 'rejectme',
+				password: '123456',
+				email: 'reject@me.com'
+			}, function (err) {
+				assert.ifError(err);
+				helpers.loginUser('admin', '123456', function (err, jar) {
+					assert.ifError(err);
+					request(nconf.get('url') + '/api/admin/manage/registration', {jar: jar, json: true}, function (err, res, body) {
+						assert.ifError(err);
+						assert.equal(body.users[0].username, 'rejectme');
+						assert.equal(body.users[0].email, 'reject@me.com');
+						done();
+					});
+				});
+			});
+		});
+
+		it('should reject user registration', function (done) {
+			socketAdmin.user.rejectRegistration({uid: adminUid}, {username: 'rejectme'}, function (err) {
+				assert.ifError(err);
+				User.getRegistrationQueue(0, -1, function (err, users) {
+					assert.ifError(err);
+					assert.equal(users.length, 0);
+					done();
+				});
+			});
+		});
+
+		it('should accept user registration', function (done) {
+			helpers.registerUser({
+				username: 'acceptme',
+				password: '123456',
+				email: 'accept@me.com'
+			}, function (err) {
+				assert.ifError(err);
+				socketAdmin.user.acceptRegistration({uid: adminUid}, {username: 'acceptme'}, function (err, uid) {
+					assert.ifError(err);
+					User.exists(uid, function (err, exists) {
+						assert.ifError(err);
+						assert(exists);
+						User.getRegistrationQueue(0, -1, function (err, users) {
+							assert.ifError(err);
+							assert.equal(users.length, 0);
+							done();
+						});
+					});
 				});
 			});
 		});

@@ -533,8 +533,8 @@ describe('Controllers', function () {
 				}
 			}, function (err, res, body) {
 				assert.ifError(err);
-				assert.equal(res.statusCode, 500);
-				assert.equal(body, '[[error:no-session-found]]');
+				assert.equal(res.statusCode, 403);
+				assert.equal(body, '{"path":"/user/doesnotexist/session/1112233","loggedIn":true,"title":"[[global:403.title]]"}');
 				done();
 			});
 		});
@@ -698,6 +698,198 @@ describe('Controllers', function () {
 				assert.ifError(err);
 				assert.equal(res.statusCode, 200);
 				assert(body);
+				done();
+			});
+		});
+	});
+
+	describe('account pages', function () {
+		var helpers = require('./helpers');
+		var jar;
+		before(function (done) {
+			helpers.loginUser('foo', 'barbar', function (err, _jar) {
+				assert.ifError(err);
+				jar = _jar;
+				done();
+			});
+		});
+
+		it('should load /user/foo/posts', function (done) {
+			request(nconf.get('url') + '/api/user/foo/posts', function (err, res, body) {
+				assert.ifError(err);
+				assert.equal(res.statusCode, 200);
+				assert(body);
+				done();
+			});
+		});
+
+		it('should 401 if not logged in', function (done) {
+			request(nconf.get('url') + '/api/user/foo/bookmarks', function (err, res, body) {
+				assert.ifError(err);
+				assert.equal(res.statusCode, 401);
+				assert(body);
+				done();
+			});
+		});
+
+		it('should load /user/foo/bookmarks', function (done) {
+			request(nconf.get('url') + '/api/user/foo/bookmarks', {jar: jar}, function (err, res, body) {
+				assert.ifError(err);
+				assert.equal(res.statusCode, 200);
+				assert(body);
+				done();
+			});
+		});
+
+		it('should load /user/foo/upvoted', function (done) {
+			request(nconf.get('url') + '/api/user/foo/upvoted', {jar: jar}, function (err, res, body) {
+				assert.ifError(err);
+				assert.equal(res.statusCode, 200);
+				assert(body);
+				done();
+			});
+		});
+
+		it('should load /user/foo/downvoted', function (done) {
+			request(nconf.get('url') + '/api/user/foo/downvoted', {jar: jar}, function (err, res, body) {
+				assert.ifError(err);
+				assert.equal(res.statusCode, 200);
+				assert(body);
+				done();
+			});
+		});
+
+		it('should load /user/foo/best', function (done) {
+			request(nconf.get('url') + '/api/user/foo/best', function (err, res, body) {
+				assert.ifError(err);
+				assert.equal(res.statusCode, 200);
+				assert(body);
+				done();
+			});
+		});
+
+		it('should load /user/foo/watched', function (done) {
+			request(nconf.get('url') + '/api/user/foo/watched', {jar: jar}, function (err, res, body) {
+				assert.ifError(err);
+				assert.equal(res.statusCode, 200);
+				assert(body);
+				done();
+			});
+		});
+
+		it('should load /user/foo/topics', function (done) {
+			request(nconf.get('url') + '/api/user/foo/topics', function (err, res, body) {
+				assert.ifError(err);
+				assert.equal(res.statusCode, 200);
+				assert(body);
+				done();
+			});
+		});
+
+		it('should load notifications page', function (done) {
+			var notifications = require('../src/notifications');
+			var notifData = {
+				bodyShort: '[[notifications:user_posted_to, test1, test2]]',
+				bodyLong: 'some post content',
+				pid: 1,
+				path: '/post/' + 1,
+				nid: 'new_post:tid:' + 1 + ':pid:' + 1 + ':uid:' + fooUid,
+				tid: 1,
+				from: fooUid,
+				mergeId: 'notifications:user_posted_to|' + 1,
+				topicTitle: 'topic title'
+			};
+			async.waterfall([
+				function (next) {
+					notifications.create(notifData, next);
+				},
+				function (notification, next) {
+					notifications.push(notification, fooUid, next);
+				},
+				function (next) {
+					setTimeout(next, 2500);
+				},
+				function (next) {
+					request(nconf.get('url') + '/api/notifications', {jar: jar, json: true}, next);
+				},
+				function (res, body, next) {
+					assert.equal(res.statusCode, 200);
+					assert(body);
+					var notif = body.notifications[0];
+					assert.equal(notif.bodyShort, notifData.bodyShort);
+					assert.equal(notif.bodyLong, notifData.bodyLong);
+					assert.equal(notif.pid, notifData.pid);
+					assert.equal(notif.path, notifData.path);
+					assert.equal(notif.nid, notifData.nid);
+					next();
+				}
+			], done);
+		});
+	});
+
+	describe('account follow page', function () {
+		var socketUser = require('../src/socket.io/user');
+		var uid;
+		before(function (done) {
+			user.create({username: 'follower'}, function (err, _uid) {
+				assert.ifError(err);
+				uid = _uid;
+				socketUser.follow({uid: uid}, {uid: fooUid}, function (err) {
+					assert.ifError(err);
+					socketUser.isFollowing({uid: uid}, {uid: fooUid}, function (err, isFollowing) {
+						assert.ifError(err);
+						assert(isFollowing);
+						done();
+					});
+				});
+			});
+		});
+
+		it('should get followers page', function (done) {
+			request(nconf.get('url') + '/api/user/foo/followers', {json: true}, function (err, res, body) {
+				assert.ifError(err);
+				assert.equal(res.statusCode, 200);
+				assert.equal(body.users[0].username, 'follower');
+				done();
+			});
+		});
+
+		it('should get following page', function (done) {
+			request(nconf.get('url') + '/api/user/follower/following', {json: true}, function (err, res, body) {
+				assert.ifError(err);
+				assert.equal(res.statusCode, 200);
+				assert.equal(body.users[0].username, 'foo');
+				done();
+			});
+		});
+
+		it('should return empty after unfollow', function (done ) {
+			socketUser.unfollow({uid: uid}, {uid: fooUid}, function (err) {
+				assert.ifError(err);
+				request(nconf.get('url') + '/api/user/foo/followers', {json: true}, function (err, res, body) {
+					assert.ifError(err);
+					assert.equal(res.statusCode, 200);
+					assert.equal(body.users.length, 0);
+					done();
+				});
+			});
+		});
+	});
+
+	describe('post redirect', function () {
+		it('should 404 for invalid pid', function (done) {
+			request(nconf.get('url') + '/post/fail', function (err, res) {
+				assert.ifError(err);
+				assert.equal(res.statusCode, 404);
+				done();
+			});
+		});
+
+		it('should return correct post path', function (done) {
+			request(nconf.get('url') + '/api/post/' + pid, function (err, res, body) {
+				assert.ifError(err);
+				assert.equal(res.statusCode, 308);
+				assert.equal(body, '"/topic/1/test-topic-title/1"');
 				done();
 			});
 		});

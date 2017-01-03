@@ -3,18 +3,29 @@
 (function (factory) {
 	'use strict';
 	function loadClient(language, namespace) {
-		return Promise.resolve(jQuery.getJSON(config.relative_path + '/api/language/' + language + '/' + namespace));
+		return Promise.resolve(jQuery.getJSON(config.relative_path + '/api/language/' + language + '/' + encodeURIComponent(namespace)));
+	}
+	var warn = function () {};
+	if (typeof config === 'object' && config.environment === 'development') {
+		warn = console.warn.bind(console);
 	}
 	if (typeof define === 'function' && define.amd) {
 		// AMD. Register as a named module
 		define('translator', ['string'], function (string) {
-			return factory(string, loadClient);
+			return factory(string, loadClient, warn);
 		});
 	} else if (typeof module === 'object' && module.exports) {
 		// Node
 		(function () {
 			require('promise-polyfill');
 			var languages = require('../../../src/languages');
+
+			if (global.env === 'development') {
+				var winston = require('winston');
+				warn = function (a) {
+					winston.warn(a);
+				};
+			}
 
 			function loadServer(language, namespace) {
 				return new Promise(function (resolve, reject) {
@@ -28,12 +39,12 @@
 				});
 			}
 
-			module.exports = factory(require('string'), loadServer);
+			module.exports = factory(require('string'), loadServer, warn);
 		}());
 	} else {
-		window.translator = factory(window.string, loadClient);
+		window.translator = factory(window.string, loadClient, warn);
 	}
-}(function (string, load) {
+}(function (string, load, warn) {
 	'use strict';
 	var assign = Object.assign || jQuery.extend;
 	function classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
@@ -105,7 +116,7 @@
 					} else if (text.slice(i, i + 2) === ']]') {
 						level -= 1;
 						i += 1;
-					} else if (level === 0 && text[i] === ',') {
+					} else if (level === 0 && text[i] === ',' && text[i - 1] !== '\\') {
 						arr.push(text.slice(brk, i).trim());
 						i += 1;
 						brk = i;
@@ -238,6 +249,7 @@
 			}
 
 			if (namespace && !key) {
+				warn('Missing key in translation token "' + name + '"');
 				return Promise.resolve('[[' + namespace + ']]');
 			}
 
@@ -256,11 +268,13 @@
 				var translatedArgs = result.slice(1);
 
 				if (!translated) {
+					warn('Missing translation "' + name + '"');
 					return key;
 				}
 				var out = translated;
 				translatedArgs.forEach(function (arg, i) {
-					out = out.replace(new RegExp('%' + (i + 1), 'g'), arg);
+					var escaped = arg.replace(/%/g, '&#37;').replace(/\\,/g, '&#44;');
+					out = out.replace(new RegExp('%' + (i + 1), 'g'), escaped);
 				});
 				return out;
 			});
@@ -275,7 +289,7 @@
 		Translator.prototype.getTranslation = function getTranslation(namespace, key) {
 			var translation;
 			if (!namespace) {
-				console.warn('[translator] Parameter `namespace` is ' + namespace + (namespace === '' ? '(empty string)' : ''));
+				warn('[translator] Parameter `namespace` is ' + namespace + (namespace === '' ? '(empty string)' : ''));
 				translation = Promise.resolve({});
 			} else {
 				translation = this.translations[namespace] = this.translations[namespace] || this.load(this.lang, namespace);
@@ -339,6 +353,73 @@
 
 		Translator.moduleFactories = {};
 
+		/**
+		 * Remove the translator patterns from text
+		 * @param {string} text
+		 * @returns {string}
+		 */
+		Translator.removePatterns = function removePatterns(text) {
+			var len = text.length;
+			var cursor = 0;
+			var lastBreak = 0;
+			var level = 0;
+			var out = '';
+			var sub;
+
+			while (cursor < len) {
+				sub = text.slice(cursor, cursor + 2);
+				if (sub === '[[') {
+					if (level === 0) {
+						out += text.slice(lastBreak, cursor);
+					}
+					level += 1;
+					cursor += 2;
+				} else if (sub === ']]') {
+					level -= 1;
+					cursor += 2;
+					if (level === 0) {
+						lastBreak = cursor;
+					}
+				} else {
+					cursor += 1;
+				}
+			}
+			out += text.slice(lastBreak, cursor);
+			return out;
+		};
+
+		/**
+		 * Escape translator patterns in text
+		 * @param {string} text
+		 * @returns {string}
+		 */
+		Translator.escape = function escape(text) {
+			return typeof text === 'string' ? text.replace(/\[\[([\S]*?)\]\]/g, '\\[\\[$1\\]\\]') : text;
+		};
+
+		/**
+		 * Unescape escaped translator patterns in text
+		 * @param {string} text
+		 * @returns {string}
+		 */
+		Translator.unescape = function unescape(text) {
+			return typeof text === 'string' ? text.replace(/\\\[\\\[([\S]*?)\\\]\\\]/g, '[[$1]]') : text;
+		};
+
+		/**
+		 * Construct a translator pattern
+		 * @param {string} name - Translation name
+		 * @param {...string} arg - Optional argument for the pattern
+		 */
+		Translator.compile = function compile() {
+			var args = Array.prototype.slice.call(arguments, 0).map(function (text) {
+				// escape commas and percent signs in arguments
+				return text.replace(/%/g, '&#37;').replace(/,/g, '&#44;');
+			});
+
+			return '[[' + args.join(', ') + ']]';
+		};
+
 		return Translator;
 	}());
 
@@ -348,12 +429,16 @@
 		 */
 		Translator: Translator,
 
+		compile: Translator.compile,
+		escape: Translator.escape,
+		unescape: Translator.unescape,
+		getLanguage: Translator.getLanguage,
+
 		/**
 		 * Legacy translator function for backwards compatibility
 		 */
 		translate: function translate(text, language, callback) {
-			// console.warn('[translator] `translator.translate(text, [lang, ]callback)` is deprecated. ' +
-			//   'Use the `translator.Translator` class instead.');
+			// TODO: deprecate?
 
 			var cb = callback;
 			var lang = language;
@@ -369,33 +454,8 @@
 			Translator.create(lang).translate(text).then(function (output) {
 				return cb(output);
 			}).catch(function (err) {
-				console.error('Translation failed: ' + err.stack);
+				warn('Translation failed: ' + err.stack);
 			});
-		},
-
-		/**
-		 * Construct a translator pattern
-		 * @param {string} name - Translation name
-		 * @param {string[]} args - Optional arguments for the pattern
-		 */
-		compile: function compile() {
-			var args = Array.prototype.slice.call(arguments, 0);
-
-			return '[[' + args.join(', ') + ']]';
-		},
-
-		/**
-		 * Escape translation patterns from text
-		 */
-		escape: function escape(text) {
-			return typeof text === 'string' ? text.replace(/\[\[([\S]*?)\]\]/g, '\\[\\[$1\\]\\]') : text;
-		},
-
-		/**
-		 * Unescape translation patterns from text
-		 */
-		unescape: function unescape(text) {
-			return typeof text === 'string' ? text.replace(/\\\[\\\[([\S]*?)\\\]\\\]/g, '[[$1]]') : text;
 		},
 
 		/**
@@ -421,11 +481,6 @@
 		load: function load(language, namespace, callback) {
 			adaptor.getTranslations(language, namespace, callback);
 		},
-
-		/**
-		 * Get the language of the current environment, falling back to defaults
-		 */
-		getLanguage: Translator.getLanguage,
 
 		toggleTimeagoShorthand: function toggleTimeagoShorthand() {
 			var tmp = assign({}, jQuery.timeago.settings.strings);

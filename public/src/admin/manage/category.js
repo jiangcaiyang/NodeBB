@@ -5,9 +5,11 @@ define('admin/manage/category', [
 	'uploader',
 	'iconSelect',
 	'admin/modules/colorpicker',
-	'autocomplete'
-], function (uploader, iconSelect, colorpicker, autocomplete) {
+	'autocomplete',
+	'translator'
+], function (uploader, iconSelect, colorpicker, autocomplete, translator) {
 	var	Category = {};
+	var modified_categories = {};
 
 	Category.init = function () {
 		var modified_categories = {};
@@ -28,16 +30,19 @@ define('admin/manage/category', [
 			e.preventDefault();
 
 			if(Object.keys(modified_categories).length) {
-				socket.emit('admin.categories.update', modified_categories, function (err, result) {
+				socket.emit('admin.categories.update', modified_categories, function (err, results) {
 					if (err) {
 						return app.alertError(err.message);
 					}
 
-					if (result && result.length) {
+					if (results && results.length) {
 						app.flags._unsaved = false;
 						app.alert({
-							title: 'Updated Categories',
-							message: 'Category IDs ' + result.join(', ') + ' was successfully updated.',
+							title: '[[admin/manage/categories:alert.updated]]',
+							message: translator.compile(
+								'admin/manage/categories:alert.updated-success',
+								results.join('&#44; ')
+							),
 							type: 'success',
 							timeout: 2000
 						});
@@ -85,11 +90,35 @@ define('admin/manage/category', [
 
 		$('[data-name="bgColor"], [data-name="color"]').each(enableColorPicker);
 
-		$('#save').on('click', save);
+		$('#save').on('click', function () {
+			if (Object.keys(modified_categories).length) {
+				socket.emit('admin.categories.update', modified_categories, function (err, result) {
+					if (err) {
+						return app.alertError(err.message);
+					}
+
+					if (result && result.length) {
+						app.flags._unsaved = false;
+						app.alert({
+							title: 'Updated Categories',
+							message: 'Category IDs ' + result.join(', ') + ' was successfully updated.',
+							type: 'success',
+							timeout: 2000
+						});
+					}
+				});
+				modified_categories = {};
+			}
+			return false;
+		});
+
 		$('.purge').on('click', function (e) {
 			e.preventDefault();
 
-			bootbox.confirm('<p class="lead">Do you really want to purge this category "' + $('form.category').find('input[data-name="name"]').val() + '"?</p><h5><strong class="text-danger">Warning!</strong> All topics and posts in this category will be purged!</h5> <p class="help-block">Purging a category will remove all topics and posts, and delete the category from the database. If you want to remove a category <em>temporarily</em>, you\'ll want to "disable" the category instead.</p>', function (confirm) {
+			bootbox.confirm(translator.compile(
+				'admin/manage/categories:alert.confirm-purge',
+				$('form.category').find('input[data-name="name"]').val()
+			), function (confirm) {
 				if (!confirm) {
 					return;
 				}
@@ -97,7 +126,7 @@ define('admin/manage/category', [
 					if (err) {
 						return app.alertError(err.message);
 					}
-					app.alertSuccess('Category purged!');
+					app.alertSuccess('[[admin/manage/categories:alert.purge-success]]');
 					ajaxify.go('admin/manage/categories');
 				});
 			});
@@ -109,7 +138,7 @@ define('admin/manage/category', [
 					if (err) {
 						return app.alertError(err.message);
 					}
-					app.alertSuccess('Settings Copied!');
+					app.alertSuccess('[[admin/manage/categories:alert.copy-success]]');
 					ajaxify.refresh();
 				});
 			});
@@ -121,7 +150,7 @@ define('admin/manage/category', [
 			var cid = inputEl.attr('data-cid');
 
 			uploader.show({
-				title: 'Upload category image',
+				title: '[[admin/manage/categories:alert.upload-image]]',
 				route: config.relative_path + '/api/admin/category/uploadpicture',
 				params: {cid: cid}
 			}, function (imageUrlOnServer) {
@@ -171,7 +200,36 @@ define('admin/manage/category', [
 		});
 
 		Category.setupPrivilegeTable();
+
+		handleTags();
 	};
+
+	function modified(el) {
+		var cid = ajaxify.data.category.cid;
+
+		if (cid) {
+			modified_categories[cid] = modified_categories[cid] || {};
+			modified_categories[cid][$(el).attr('data-name')] = $(el).val();
+
+			app.flags = app.flags || {};
+			app.flags._unsaved = true;
+		}
+	}
+
+	function handleTags() {
+		var tagEl = $('#tag-whitelist');
+		tagEl.tagsinput({
+			confirmKeys: [13, 44],
+			trimValue: true
+		});
+
+		ajaxify.data.category.tagWhitelist.forEach(function (tag) {
+			tagEl.tagsinput('add', tag);
+		});
+		tagEl.on('itemAdded itemRemoved', function (event) {
+			modified(tagEl);
+		});
+	}
 
 	Category.setupPrivilegeTable = function () {
 		$('.privilege-table-container').on('change', 'input[type="checkbox"]', function () {
@@ -185,7 +243,7 @@ define('admin/manage/category', [
 
 			if (member) {
 				if (isGroup && privilege === 'groups:moderate' && !isPrivate && state) {
-					bootbox.confirm('<strong>Are you sure you wish to grant the moderation privilege to this user group?</strong> This group is public, and any users can join at will.', function (confirm) {
+					bootbox.confirm('[[admin/manage/categories:alert.confirm-moderate]]', function (confirm) {
 						if (confirm) {
 							Category.setPrivilege(member, privilege, state, checkboxEl);
 						} else {
@@ -217,8 +275,10 @@ define('admin/manage/category', [
 			templates.parse('admin/partials/categories/privileges', {
 				privileges: privileges
 			}, function (html) {
-				$('.privilege-table-container').html(html);
-				Category.exposeAssumedPrivileges();
+				translator.translate(html, function (html) {
+					$('.privilege-table-container').html(html);
+					Category.exposeAssumedPrivileges();
+				});
 			});
 		});
 	};
@@ -276,7 +336,7 @@ define('admin/manage/category', [
 			}, function (html) {
 				var modal = bootbox.dialog({
 					message: html,
-					title: 'Set Parent Category'
+					title: '[[admin/manage/categories:alert.set-parent-category]]'
 				});
 
 				modal.find('li[data-cid]').on('click', function () {
@@ -309,8 +369,8 @@ define('admin/manage/category', [
 
 	Category.addUserToPrivilegeTable = function () {
 		var modal = bootbox.dialog({
-			title: 'Find a User',
-			message: '<input class="form-control input-lg" placeholder="Search for a user here..." />',
+			title: '[[admin/manage/categories:alert.find-user]]',
+			message: '<input class="form-control input-lg" placeholder="[[admin/manage/categories:alert.user-search]]" />',
 			show: true
 		});
 
@@ -337,8 +397,8 @@ define('admin/manage/category', [
 
 	Category.addGroupToPrivilegeTable = function () {
 		var modal = bootbox.dialog({
-			title: 'Find a Group',
-			message: '<input class="form-control input-lg" placeholder="Search for a group here..." />',
+			title: '[[admin/manage/categories:alert.find-group]]',
+			message: '<input class="form-control input-lg" placeholder="[[admin/manage/categories:alert.group-search]]" />',
 			show: true
 		});
 
@@ -392,26 +452,28 @@ define('admin/manage/category', [
 			templates.parse('admin/partials/categories/select-category', {
 				categories: categories
 			}, function (html) {
-				function submit() {
-					var formData = modal.find('form').serializeObject();
-					callback(formData['select-cid']);
-					modal.modal('hide');
-					return false;
-				}
-
-				var modal = bootbox.dialog({
-					title: 'Select a Category',
-					message: html,
-					buttons: {
-						save: {
-							label: 'Copy',
-							className: 'btn-primary',
-							callback: submit
-						}
+				translator.translate(html, function (html) {
+					function submit() {
+						var formData = modal.find('form').serializeObject();
+						callback(formData['select-cid']);
+						modal.modal('hide');
+						return false;
 					}
-				});
 
-				modal.find('form').on('submit', submit);
+					var modal = bootbox.dialog({
+						title: 'Select a Category',
+						message: html,
+						buttons: {
+							save: {
+								label: 'Copy',
+								className: 'btn-primary',
+								callback: submit
+							}
+						}
+					});
+
+					modal.find('form').on('submit', submit);
+				});
 			});
 		});
 	}

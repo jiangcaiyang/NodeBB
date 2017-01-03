@@ -39,6 +39,11 @@ module.exports = function (Plugins) {
 	};
 
 	Plugins.prepareForBuild = function (callback) {
+		Plugins.cssFiles.length = 0;
+		Plugins.lessFiles.length = 0;
+		Plugins.clientScripts.length = 0;
+		Plugins.acpScripts.length = 0;
+
 		async.waterfall([
 			async.apply(Plugins.getPluginPaths),
 			function (paths, next) {
@@ -190,25 +195,19 @@ module.exports = function (Plugins) {
 	}
 
 	function mapClientSideScripts(pluginData, callback) {
-		if (Array.isArray(pluginData.scripts)) {
-			if (global.env === 'development') {
-				winston.verbose('[plugins] Found ' + pluginData.scripts.length + ' js file(s) for plugin ' + pluginData.id);
+		function mapScripts(scripts, param) {
+			if (Array.isArray(scripts) && scripts.length) {
+				if (global.env === 'development') {
+					winston.verbose('[plugins] Found ' + scripts.length + ' js file(s) for plugin ' + pluginData.id);
+				}
+
+				Plugins[param] = Plugins[param].concat(scripts.map(function (file) {
+					return resolveModulePath(path.join(__dirname, '../../node_modules/', pluginData.id, file), file);
+				})).filter(Boolean);
 			}
-
-			Plugins.clientScripts = Plugins.clientScripts.concat(pluginData.scripts.map(function (file) {
-				return resolveModulePath(path.join(__dirname, '../../node_modules/', pluginData.id, file), file);
-			})).filter(Boolean);
 		}
-
-		if (Array.isArray(pluginData.acpScripts)) {
-			if (global.env === 'development') {
-				winston.verbose('[plugins] Found ' + pluginData.acpScripts.length + ' ACP js file(s) for plugin ' + pluginData.id);
-			}
-
-			Plugins.acpScripts = Plugins.acpScripts.concat(pluginData.acpScripts.map(function (file) {
-				return resolveModulePath(path.join(__dirname, '../../node_modules/', pluginData.id, file), file);
-			})).filter(Boolean);
-		}
+		mapScripts(pluginData.scripts, 'clientScripts');
+		mapScripts(pluginData.acpScripts, 'acpScripts');
 
 		callback();
 	}

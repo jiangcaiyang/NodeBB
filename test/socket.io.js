@@ -253,13 +253,45 @@ describe('socket.io', function () {
 		});
 	});
 
-	it('should validate emails', function (done) {
+
+
+	describe('validation emails', function () {
 		var socketAdmin = require('../src/socket.io/admin');
-		socketAdmin.user.validateEmail({uid: adminUid}, [regularUid], function (err) {
-			assert.ifError(err);
-			user.getUserField(regularUid, 'email:confirmed', function (err, emailConfirmed) {
+		var meta = require('../src/meta');
+
+		it('should validate emails', function (done) {
+			socketAdmin.user.validateEmail({uid: adminUid}, [regularUid], function (err) {
 				assert.ifError(err);
-				assert.equal(parseInt(emailConfirmed, 10), 1);
+				user.getUserField(regularUid, 'email:confirmed', function (err, emailConfirmed) {
+					assert.ifError(err);
+					assert.equal(parseInt(emailConfirmed, 10), 1);
+					done();
+				});
+			});
+		});
+
+		it('should error with invalid uids', function (done) {
+			var socketAdmin = require('../src/socket.io/admin');
+			socketAdmin.user.sendValidationEmail({uid: adminUid}, null, function (err) {
+				assert.equal(err.message, '[[error:invalid-data]]');
+				done();
+			});
+		});
+
+		it('should error if email validation is not required', function (done) {
+			var socketAdmin = require('../src/socket.io/admin');
+			socketAdmin.user.sendValidationEmail({uid: adminUid}, [regularUid], function (err) {
+				assert.equal(err.message, '[[error:email-confirmations-are-disabled]]');
+				done();
+			});
+		});
+
+		it('should send validation email', function (done) {
+			var socketAdmin = require('../src/socket.io/admin');
+			meta.config.requireEmailConfirmation = 1;
+			socketAdmin.user.sendValidationEmail({uid: adminUid}, [regularUid], function (err) {
+				assert.ifError(err);
+				meta.config.requireEmailConfirmation = 0;
 				done();
 			});
 		});
@@ -339,6 +371,56 @@ describe('socket.io', function () {
 			done();
 		});
 	});
+
+	it('should return error', function (done) {
+		var socketAdmin = require('../src/socket.io/admin');
+		socketAdmin.before({uid: 10}, 'someMethod', {}, function (err) {
+			assert.equal(err.message, '[[error:no-privileges]]');
+			done();
+		});
+	});
+
+	it('should get room stats', function (done) {
+		var socketAdmin = require('../src/socket.io/admin');
+
+		io.emit('meta.rooms.enter', {enter: 'topic_1'}, function (err) {
+			assert.ifError(err);
+			socketAdmin.rooms.getAll({uid: 10}, {}, function (err) {
+				assert.ifError(err);
+				setTimeout(function () {
+					socketAdmin.rooms.getAll({uid: 10}, {}, function (err, data) {
+						assert.ifError(err);
+						assert(data.hasOwnProperty('onlineGuestCount'));
+						assert(data.hasOwnProperty('onlineRegisteredCount'));
+						assert(data.hasOwnProperty('socketCount'));
+						assert(data.hasOwnProperty('topics'));
+						assert(data.hasOwnProperty('users'));
+						assert.equal(data.topics['1'].title, 'test topic title');
+						done();
+					});
+				}, 1000);
+			});
+		});
+	});
+
+	it('should get room stats', function (done) {
+		var socketAdmin = require('../src/socket.io/admin');
+
+		io.emit('meta.rooms.enter', {enter: 'category_1'}, function (err) {
+			assert.ifError(err);
+			socketAdmin.rooms.getAll({uid: 10}, {}, function (err) {
+				assert.ifError(err);
+				setTimeout(function () {
+					socketAdmin.rooms.getAll({uid: 10}, {}, function (err, data) {
+						assert.ifError(err);
+						assert.equal(data.users.category, 1);
+						done();
+					});
+				}, 1000);
+			});
+		});
+	});
+
 
 	after(function (done) {
 		db.emptydb(done);

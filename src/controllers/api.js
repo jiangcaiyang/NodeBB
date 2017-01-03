@@ -63,7 +63,9 @@ apiController.getConfig = function (req, res, next) {
 	config.csrf_token = req.csrfToken();
 	config.searchEnabled = plugins.hasListeners('filter:search.query');
 	config.bootswatchSkin = 'default';
-	config.timeagoCutoff = meta.config.timeagoCutoff;
+
+	var timeagoCutoff = meta.config.timeagoCutoff === undefined ? 30 : meta.config.timeagoCutoff;
+	config.timeagoCutoff = timeagoCutoff !== '' ? Math.max(0, parseInt(timeagoCutoff, 10)) : timeagoCutoff;
 
 	config.cookies = {
 		enabled: parseInt(meta.config.cookieConsentEnabled, 10) === 1,
@@ -107,22 +109,17 @@ apiController.getConfig = function (req, res, next) {
 
 
 apiController.renderWidgets = function (req, res, next) {
-	var areas = {
-		template: req.query.template,
-		locations: req.query.locations,
-		url: req.query.url
-	};
-
-	if (!areas.template || !areas.locations) {
+	if (!req.query.template || !req.query.locations) {
 		return res.status(200).json({});
 	}
 
 	widgets.render(req.uid,
 		{
-			template: areas.template,
-			url: areas.url,
-			locations: areas.locations,
-			isMobile: req.query.isMobile === 'true'
+			template: req.query.template,
+			url: req.query.url,
+			locations: req.query.locations,
+			isMobile: req.query.isMobile === 'true',
+			cid: req.query.cid
 		},
 		req,
 		res,
