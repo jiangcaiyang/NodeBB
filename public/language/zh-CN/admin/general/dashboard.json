@@ -1,10 +1,10 @@
 {
 	"forum-traffic": "论坛流量",
-	"page-views": "页面察看",
+    "page-views": "页面查看",
 	"unique-visitors": "单一访客",
-	"page-views-last-month": "上个月页面察看",
-	"page-views-this-month": "本月页面察看",
-	"page-views-last-day": "过去24小时页面察看",
+    "page-views-last-month": "上个月页面查看",
+    "page-views-this-month": "本月页面查看",
+    "page-views-last-day": "过去24小时页面查看",
 
 	"stats.day": "日",
 	"stats.week": "周",
@@ -48,7 +48,7 @@
 
 	"high-presence-topics": "高频话题",
 
-	"graphs.page-views": "页面察看",
+    "graphs.page-views": "页面查看",
 	"graphs.unique-visitors": "单一访客",
 	"graphs.registered-users": "已注册用户",
 	"graphs.anonymous-users": "匿名用户"
