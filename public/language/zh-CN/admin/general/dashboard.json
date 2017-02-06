@@ -5,6 +5,7 @@
 	"page-views-last-month": "上个月PV数量",
 	"page-views-this-month": "本月PV数量",
 	"page-views-last-day": "过去24小时PV量",
+
 	"stats.day": "日",
 	"stats.week": "周",
 	"stats.month": "月",
@@ -47,7 +48,7 @@
 
 	"high-presence-topics": "高频话题",
 
-    "graphs.page-views": "页面查看",
+	"graphs.page-views": "页面察看",
 	"graphs.unique-visitors": "单一访客",
 	"graphs.registered-users": "已注册用户",
 	"graphs.anonymous-users": "匿名用户"
