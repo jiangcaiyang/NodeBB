@@ -1,20 +1,20 @@
 {
-	"queue": "Queue",
-	"description": "There are no users in the registration queue. <br> To enable this feature, go to <a href=\"%1\">Settings &rarr; User &rarr; User Registration</a> and set <strong>Registration Type</strong> to \"Admin Approval\".",
+	"queue": "File d'attente",
+	"description": "Il n'y a aucun utilisateur dans la file d'inscription.<br> Pour activer cette fonctionnalité, allez dans <a href=\"%1\">Paramètres &rarr; Utilisateurs &rarr; inscription des utilisateurs</a> et définissez <strong>Type d'inscription</strong> en \"Approbation par l'administrateur\".",
 
-	"list.name": "Name",
-	"list.email": "Email",
+	"list.name": "Nom",
+	"list.email": "E-mail",
 	"list.ip": "IP",
-	"list.time": "Time",
-	"list.username-spam": "Frequency: %1 Appears: %2 Confidence: %3",
-	"list.email-spam": "Frequency: %1 Appears: %2",
-	"list.ip-spam": "Frequency: %1 Appears: %2",
+	"list.time": "Date",
+	"list.username-spam": "Fréquence : %1 Apparait : %2 Confiance : %3",
+	"list.email-spam": "Fréquence : %1 Apparait : %2",
+	"list.ip-spam": "Fréquence : %1 Apparait : %2",
 
 	"invitations": "Invitations",
-	"invitations.description": "Below is a complete list of invitations sent. Use ctrl-f to search through the list by email or username. <br><br>The username will be displayed to the right of the emails for users who have redeemed their invitations.",
-	"invitations.inviter-username": "Inviter Username",
-	"invitations.invitee-email": "Invitee Email",
-	"invitations.invitee-username": "Invitee Username (if registered)",
+	"invitations.description": "Ci-dessous se trouve une liste complète des invitations envoyées. Utilisez ctrl-f pour rechercher un email ou nom d'utilisateur dans la liste. <br>\n<br>Le nom d'utilisateur sera afficher à droite des emails pour les utilisateurs qui ont accepté leur invitation.",
+	"invitations.inviter-username": "Nom d'utilisateur qui a invité",
+	"invitations.invitee-email": "Email invité",
+	"invitations.invitee-username": "Nom d'utilisateur de l'invité (si inscrit)",
 
-	"invitations.confirm-delete": "Are you sure you wish to delete this invitation?"
+	"invitations.confirm-delete": "Êtes-vous sûr de vouloir supprimer l'invitation ?"
 } 
