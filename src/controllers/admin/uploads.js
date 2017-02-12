@@ -70,7 +70,7 @@ uploadsController.uploadTouchIcon = function (req, res, next) {
 				async.series([
 					async.apply(file.saveFileToLocal, 'touchicon-' + size + '.png', 'system', uploadedFile.path),
 					async.apply(image.resizeImage, {
-						path: path.join(nconf.get('base_dir'), nconf.get('upload_path'), 'system', 'touchicon-' + size + '.png'),
+						path: path.join(nconf.get('upload_path'), 'system', 'touchicon-' + size + '.png'),
 						extension: 'png',
 						width: size,
 						height: size
@@ -105,14 +105,10 @@ uploadsController.uploadSound = function (req, res, next) {
 			return next(err);
 		}
 
-		var	soundsPath = path.join(__dirname, '../../../public/sounds'),
-			filePath = path.join(__dirname, '../../../public/uploads/sounds', uploadedFile.name);
+		var	soundsPath = path.join(__dirname, '../../../build/public/sounds'),
+			filePath = path.join(nconf.get('upload_path'), 'sounds', uploadedFile.name);
 
-		if (process.platform === 'win32') {
-			fs.link(filePath, path.join(soundsPath, path.basename(filePath)));
-		} else {
-			fs.symlink(filePath, path.join(soundsPath, path.basename(filePath)), 'file');
-		}
+		file.link(filePath, path.join(soundsPath, path.basename(filePath)));
 
 		fs.unlink(uploadedFile.path, function (err) {
 			if (err) {

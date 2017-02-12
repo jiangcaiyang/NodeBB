@@ -8,6 +8,7 @@ var rimraf = require('rimraf');
 var mkdirp = require('mkdirp');
 var async = require('async');
 
+var file = require('../file');
 var plugins = require('../plugins');
 var db = require('../database');
 
@@ -28,14 +29,26 @@ module.exports = function (Meta) {
 	Meta.sounds.getFiles = function (callback) {
 		async.waterfall([
 			function (next) {
-				fs.readdir(path.join(__dirname, '../../public/sounds'), next);
+				fs.readdir(path.join(__dirname, '../../build/public/sounds'), next);
 			},
 			function (sounds, next) {
-				fs.readdir(path.join(__dirname, '../../public/uploads/sounds'), function (err, uploaded) {
-					next(err, sounds.concat(uploaded));
+				fs.readdir(path.join(nconf.get('upload_path'), 'sounds'), function (err, uploaded) {
+					if (err) {
+						if (err.code === 'ENOENT') {
+							return next(null, sounds);
+						}
+						return next(err);
+					}
+					next(null, sounds.concat(uploaded));
 				});
 			}
 		], function (err, files) {
+			if (err) {
+				winston.error('Could not get local sound files:' + err.message);
+				console.log(err.stack);
+				return callback(null, []);
+			}
+
 			var	localList = {};
 
 			// Filter out hidden files
@@ -43,15 +56,9 @@ module.exports = function (Meta) {
 				return !filename.startsWith('.');
 			});
 
-			if (err) {
-				winston.error('Could not get local sound files:' + err.message);
-				console.log(err.stack);
-				return callback(null, []);
-			}
-
 			// Return proper paths
 			files.forEach(function (filename) {
-				localList[filename] = nconf.get('relative_path') + '/sounds/' + filename;
+				localList[filename] = nconf.get('relative_path') + '/assets/sounds/' + filename;
 			});
 
 			callback(null, localList);
@@ -88,38 +95,32 @@ module.exports = function (Meta) {
 	};
 
 	function setupSounds(callback) {
-		var	soundsPath = path.join(__dirname, '../../public/sounds');
+		var	soundsPath = path.join(__dirname, '../../build/public/sounds');
 
 		async.waterfall([
 			function (next) {
-				fs.readdir(path.join(__dirname, '../../public/uploads/sounds'), next);
+				fs.readdir(path.join(nconf.get('upload_path'), 'sounds'), function (err, files) {
+					if (err) {
+						if (err.code === 'ENOENT') {
+							return next(null, []);
+						}
+						return next(err);
+					}
+
+					next(null, files);
+				});
 			},
 			function (uploaded, next) {
 				uploaded = uploaded.filter(function (filename) {
 					return !filename.startsWith('.');
 				}).map(function (filename) {
-					return path.join(__dirname, '../../public/uploads/sounds', filename);
+					return path.join(nconf.get('upload_path'), 'sounds', filename);
 				});
 
 				plugins.fireHook('filter:sounds.get', uploaded, function (err, filePaths) {
 					if (err) {
 						winston.error('Could not initialise sound files:' + err.message);
 						return;
-					}
-
-					if (nconf.get('local-assets') === false) {
-						// Don't regenerate the public/sounds/ directory. Instead, create a mapping for the router to use
-						Meta.sounds._filePathHash = filePaths.reduce(function (hash, filePath) {
-							hash[path.basename(filePath)] = filePath;
-							return hash;
-						}, {});
-
-						winston.verbose('[sounds] Sounds OK');
-						if (typeof next === 'function') {
-							return next();
-						} else {
-							return;
-						}
 					}
 
 					// Clear the sounds directory
@@ -138,11 +139,7 @@ module.exports = function (Meta) {
 
 						// Link paths
 						async.each(filePaths, function (filePath, next) {
-							if (process.platform === 'win32') {
-								fs.link(filePath, path.join(soundsPath, path.basename(filePath)), next);
-							} else {
-								fs.symlink(filePath, path.join(soundsPath, path.basename(filePath)), 'file', next);
-							}
+							file.link(filePath, path.join(soundsPath, path.basename(filePath)), next);
 						}, function (err) {
 							if (!err) {
 								winston.verbose('[sounds] Sounds OK');

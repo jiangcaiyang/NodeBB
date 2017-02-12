@@ -99,7 +99,8 @@ function loadConfig(callback) {
 	nconf.defaults({
 		base_dir: __dirname,
 		themes_path: path.join(__dirname, 'node_modules'),
-		views_dir: path.join(__dirname, 'public/templates'),
+		upload_path: 'public/uploads',
+		views_dir: path.join(__dirname, 'build/public/templates'),
 		version: pkg.version
 	});
 
@@ -112,10 +113,23 @@ function loadConfig(callback) {
 	nconf.set('themes_path', path.resolve(__dirname, nconf.get('themes_path')));
 	nconf.set('core_templates_path', path.join(__dirname, 'src/views'));
 	nconf.set('base_templates_path', path.join(nconf.get('themes_path'), 'nodebb-theme-persona/templates'));
+	
+	nconf.set('upload_path', path.resolve(nconf.get('base_dir'), nconf.get('upload_path')));
 
 	if (nconf.get('url')) {
 		nconf.set('url_parsed', url.parse(nconf.get('url')));
 	}
+
+	// Explicitly cast 'jobsDisabled' as Bool
+	var castAsBool = ['jobsDisabled'];
+	nconf.stores.env.readOnly = false;
+	castAsBool.forEach(function (prop) {
+		var value = nconf.get(prop);
+		if (value) {
+			nconf.set(prop, typeof value === 'boolean' ? value : String(value).toLowerCase() === 'true');
+		}
+	});
+	nconf.stores.env.readOnly = true;
 
 	if (typeof callback === 'function') {
 		callback();
