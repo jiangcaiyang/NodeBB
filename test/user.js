@@ -2,6 +2,7 @@
 
 var assert = require('assert');
 var async = require('async');
+var path = require('path');
 var nconf = require('nconf');
 var request = require('request');
 
@@ -510,27 +511,33 @@ describe('User', function () {
 		});
 
 		it('should upload profile picture', function (done) {
-			var path = require('path');
-			var picture = {
-				path: path.join(nconf.get('base_dir'), 'public', 'logo.png'),
-				size: 7189,
-				name: 'logo.png'
-			};
-			User.uploadPicture(uid, picture, function (err, uploadedPicture) {
+			helpers.copyFile(
+				path.join(nconf.get('base_dir'), 'test/files/test.png'),
+				path.join(nconf.get('base_dir'), 'test/files/test_copy.png')
+			, function (err) {
 				assert.ifError(err);
-				assert.equal(uploadedPicture.url, '/assets/uploads/profile/' + uid + '-profileimg.png');
-				assert.equal(uploadedPicture.path, path.join(nconf.get('base_dir'), 'public', 'uploads', 'profile', uid + '-profileimg.png'));
-				done();
+				var picture = {
+					path: path.join(nconf.get('base_dir'), 'test/files/test_copy.png'),
+					size: 7189,
+					name: 'test_copy.png',
+					type: 'image/png'
+				};
+				User.uploadPicture(uid, picture, function (err, uploadedPicture) {
+					assert.ifError(err);
+					assert.equal(uploadedPicture.url, '/assets/uploads/profile/' + uid + '-profileavatar.png');
+					assert.equal(uploadedPicture.path, path.join(nconf.get('base_dir'), 'public', 'uploads', 'profile', uid + '-profileavatar.png'));
+					done();
+				});
 			});
 		});
 
 		it('should return error if profile image uploads disabled', function (done) {
 			meta.config.allowProfileImageUploads = 0;
-			var path = require('path');
 			var picture = {
-				path: path.join(nconf.get('base_dir'), 'public', 'logo.png'),
+				path: path.join(nconf.get('base_dir'), 'test/files/test.png'),
 				size: 7189,
-				name: 'logo.png'
+				name: 'test.png',
+				type: 'image/png'
 			};
 			User.uploadPicture(uid, picture, function (err) {
 				assert.equal(err.message, '[[error:profile-image-uploads-disabled]]');
@@ -540,11 +547,11 @@ describe('User', function () {
 
 		it('should return error if profile image is too big', function (done) {
 			meta.config.allowProfileImageUploads = 1;
-			var path = require('path');
 			var picture = {
-				path: path.join(nconf.get('base_dir'), 'public', 'logo.png'),
+				path: path.join(nconf.get('base_dir'), 'test/files/test.png'),
 				size: 265000,
-				name: 'logo.png'
+				name: 'test.png',
+				type: 'image/png'
 			};
 			User.uploadPicture(uid, picture, function (err) {
 				assert.equal(err.message, '[[error:file-too-big, 256]]');
@@ -552,12 +559,11 @@ describe('User', function () {
 			});
 		});
 
-		it('should return error if profile image file has no extension', function (done) {
-			var path = require('path');
+		it('should return error if profile image has no mime type', function (done) {
 			var picture = {
-				path: path.join(nconf.get('base_dir'), 'public', 'logo.png'),
+				path: path.join(nconf.get('base_dir'), 'test/files/test.png'),
 				size: 7189,
-				name: 'logo'
+				name: 'test'
 			};
 			User.uploadPicture(uid, picture, function (err) {
 				assert.equal(err.message, '[[error:invalid-image-extension]]');
@@ -577,7 +583,6 @@ describe('User', function () {
 			var url = nconf.get('url') + '/favicon.ico';
 
 			function filterMethod(data, callback) {
-				data.foo += 5;
 				callback(null, data);
 			}
 
@@ -594,7 +599,6 @@ describe('User', function () {
 			meta.config.maximumProfileImageSize = 1;
 
 			function filterMethod(data, callback) {
-				data.foo += 5;
 				callback(null, data);
 			}
 
@@ -606,20 +610,29 @@ describe('User', function () {
 			});
 		});
 
+		it('should error with invalid data', function (done) {
+			var socketUser = require('../src/socket.io/user');
+
+			socketUser.uploadProfileImageFromUrl({uid: uid}, {uid: uid, url: ''}, function (err, uploadedPicture) {
+				assert.equal(err.message, '[[error:invalid-data]]');
+				done();
+			});
+		});
+
 		it('should upload picture when uploading from url', function (done) {
+			var socketUser = require('../src/socket.io/user');
 			var url = nconf.get('url') + '/logo.png';
 			meta.config.maximumProfileImageSize = '';
 
 			function filterMethod(data, callback) {
-				data.foo += 5;
 				callback(null, {url: url});
 			}
 
 			plugins.registerHook('test-plugin', {hook: 'filter:uploadImage', method: filterMethod});
 
-			User.uploadFromUrl(uid, url, function (err, uploadedPicture) {
+			socketUser.uploadProfileImageFromUrl({uid: uid}, {uid: uid, url: url}, function (err, uploadedPicture) {
 				assert.ifError(err);
-				assert.equal(uploadedPicture.url, url);
+				assert.equal(uploadedPicture, url);
 				done();
 			});
 		});
