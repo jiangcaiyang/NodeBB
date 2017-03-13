@@ -1,6 +1,4 @@
-"use strict";
-
-
+'use strict';
 
 var async = require('async');
 var plugins = require('../plugins');
@@ -8,7 +6,7 @@ var db = require('../database');
 var translator = require('../../public/src/modules/translator');
 var pubsub = require('../pubsub');
 
-var admin = {};
+var admin = module.exports;
 admin.cache = null;
 
 pubsub.on('admin:navigation:save', function () {
@@ -38,14 +36,14 @@ admin.save = function (data, callback) {
 		},
 		function (next) {
 			db.sortedSetAdd('navigation:enabled', order, items, next);
-		}
+		},
 	], callback);
 };
 
 admin.getAdmin = function (callback) {
 	async.parallel({
 		enabled: admin.get,
-		available: getAvailable
+		available: getAvailable,
 	}, callback);
 };
 
@@ -71,5 +69,3 @@ function getAvailable(callback) {
 
 	plugins.fireHook('filter:navigation.available', core, callback);
 }
-
-module.exports = admin;

@@ -146,7 +146,7 @@ body {
 				color: @gray-dark;
 
 				&:hover, &.selected {
-					background: black;
+					background: @brand-primary;
 					color: white;
 				}
 			}
@@ -272,4 +272,8 @@ body {
 	border: 1px dashed @brand-success;
 	background: lighten(@brand-success, 10%);
 	opacity: 0.5;
+}
+
+form small {
+	color: @gray-light;
 }
