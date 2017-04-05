@@ -77,12 +77,10 @@
 		var connString = 'mongodb://' + usernamePassword + servers.join() + '/' + nconf.get('mongo:database');
 
 		var connOptions = {
-			server: {
-				poolSize: parseInt(nconf.get('mongo:poolSize'), 10) || 10,
-				socketOptions: { autoReconnect: true, keepAlive: nconf.get('mongo:keepAlive') || 0 },
-				reconnectTries: 3600,
-				reconnectInterval: 1000,
-			},
+			poolSize: 10,
+			reconnectTries: 3600,
+			reconnectInterval: 1000,
+			autoReconnect: true,
 		};
 
 		connOptions = _.deepExtend(connOptions, nconf.get('mongo:options') || {});
@@ -168,7 +166,7 @@
 	};
 
 	module.checkCompatibility = function (callback) {
-		var mongoPkg = require.main.require('./node_modules/mongodb/package.json');
+		var mongoPkg = require('mongodb/package.json');
 
 		if (semver.lt(mongoPkg.version, '2.0.0')) {
 			return callback(new Error('The `mongodb` package is out-of-date, please run `./nodebb setup` again.'));
