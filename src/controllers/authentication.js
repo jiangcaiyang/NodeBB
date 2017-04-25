@@ -16,7 +16,7 @@ var Password = require('../password');
 
 var sockets = require('../socket.io');
 
-var authenticationController = {};
+var authenticationController = module.exports;
 
 authenticationController.register = function (req, res) {
 	var registrationType = meta.config.registrationType || 'normal';
@@ -344,21 +344,21 @@ authenticationController.localLogin = function (req, username, password, next) {
 	var uid;
 	var userData = {};
 
+	if (!password || !utils.isPasswordValid(password)) {
+		return next(new Error('[[error:invalid-password]]'));
+	}
+
+	if (password.length > 4096) {
+		return next(new Error('[[error:password-too-long]]'));
+	}
+
 	async.waterfall([
-		function (next) {
-			user.isPasswordValid(password, next);
-		},
 		function (next) {
 			user.getUidByUserslug(userslug, next);
 		},
 		function (_uid, next) {
-			if (!_uid) {
-				return next(new Error('[[error:no-user]]'));
-			}
 			uid = _uid;
-			user.auth.logAttempt(uid, req.ip, next);
-		},
-		function (next) {
+
 			async.parallel({
 				userData: function (next) {
 					db.getObjectFields('user:' + uid, ['password', 'passwordExpiry'], next);
@@ -379,9 +379,7 @@ authenticationController.localLogin = function (req, username, password, next) {
 			if (!result.isAdmin && parseInt(meta.config.allowLocalLogin, 10) === 0) {
 				return next(new Error('[[error:local-login-disabled]]'));
 			}
-			if (!userData || !userData.password) {
-				return next(new Error('[[error:invalid-user-data]]'));
-			}
+
 			if (result.banned) {
 				// Retrieve ban reason and show error
 				return user.getLatestBanInfo(uid, function (err, banInfo) {
@@ -399,11 +397,14 @@ authenticationController.localLogin = function (req, username, password, next) {
 				});
 			}
 
+			user.auth.logAttempt(uid, req.ip, next);
+		},
+		function (next) {
 			Password.compare(password, userData.password, next);
 		},
 		function (passwordMatch, next) {
 			if (!passwordMatch) {
-				return next(new Error('[[error:invalid-password]]'));
+				return next(new Error('[[error:invalid-login-credentials]]'));
 			}
 			user.auth.clearLoginAttempts(uid);
 			next(null, userData, '[[success:authentication-successful]]');
@@ -436,6 +437,3 @@ authenticationController.logout = function (req, res, next) {
 		res.status(200).send('');
 	}
 };
-
-
-module.exports = authenticationController;
