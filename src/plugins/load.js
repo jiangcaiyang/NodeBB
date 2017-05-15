@@ -29,9 +29,7 @@ module.exports = function (Plugins) {
 					return path.join(__dirname, '../../node_modules/', plugin);
 				});
 
-				async.filter(plugins, file.exists, function (plugins) {
-					next(null, plugins);
-				});
+				async.filter(plugins, file.exists, next);
 			},
 		], callback);
 	};
@@ -166,13 +164,13 @@ module.exports = function (Plugins) {
 				var realPath = pluginData.staticDirs[mappedPath];
 				var staticDir = path.join(pluginPath, realPath);
 
-				file.exists(staticDir, function (exists) {
+				file.exists(staticDir, function (err, exists) {
 					if (exists) {
 						Plugins.staticDirs[pluginData.id + '/' + mappedPath] = staticDir;
 					} else {
 						winston.warn('[plugins/' + pluginData.id + '] Mapped path \'' + mappedPath + ' => ' + staticDir + '\' not found.');
 					}
-					callback();
+					callback(err);
 				});
 			}
 		}
@@ -265,12 +263,12 @@ module.exports = function (Plugins) {
 		soundpack.id = pluginData.id;
 		soundpack.dir = path.join(pluginData.path, soundpack.dir);
 		async.each(Object.keys(soundpack.sounds), function (key, next) {
-			file.exists(path.join(soundpack.dir, soundpack.sounds[key]), function (exists) {
+			file.exists(path.join(soundpack.dir, soundpack.sounds[key]), function (err, exists) {
 				if (!exists) {
 					delete soundpack.sounds[key];
 				}
 
-				next();
+				next(err);
 			});
 		}, function (err) {
 			if (err) {

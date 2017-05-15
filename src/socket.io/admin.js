@@ -173,6 +173,7 @@ SocketAdmin.config.setMultiple = function (socket, data, callback) {
 					logger.monitorConfig({ io: index.server }, setting);
 				}
 			}
+			plugins.fireHook('action:config.set', { settings: data });
 			setImmediate(next);
 		},
 	], callback);
@@ -210,10 +211,12 @@ SocketAdmin.analytics.get = function (socket, data, callback) {
 	}
 
 	// Default returns views from past 24 hours, by hour
-	if (data.units === 'days') {
-		data.amount = 30;
-	} else {
-		data.amount = 24;
+	if (!data.amount) {
+		if (data.units === 'days') {
+			data.amount = 30;
+		} else {
+			data.amount = 24;
+		}
 	}
 
 	if (data.graph === 'traffic') {
@@ -232,8 +235,8 @@ SocketAdmin.analytics.get = function (socket, data, callback) {
 					analytics.getHourlyStatsForSet('analytics:pageviews', data.until || Date.now(), data.amount, next);
 				}
 			},
-			monthlyPageViews: function (next) {
-				analytics.getMonthlyPageViews(next);
+			summary: function (next) {
+				analytics.getSummary(next);
 			},
 		}, function (err, data) {
 			data.pastDay = data.pageviews.reduce(function (a, b) { return parseInt(a, 10) + parseInt(b, 10); });

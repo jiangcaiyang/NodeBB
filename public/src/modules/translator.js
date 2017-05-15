@@ -292,7 +292,7 @@
 				return Promise.all(argsToTranslate).then(function (translatedArgs) {
 					var out = translated;
 					translatedArgs.forEach(function (arg, i) {
-						var escaped = arg.replace(/%/g, '&#37;').replace(/\\,/g, '&#44;');
+						var escaped = arg.replace(/%(?=\d)/g, '&#37;').replace(/\\,/g, '&#44;');
 						out = out.replace(new RegExp('%' + (i + 1), 'g'), escaped);
 					});
 					return out;

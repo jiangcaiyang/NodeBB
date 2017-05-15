@@ -116,10 +116,11 @@ define('forum/topic/postTools', [
 
 		postContainer.on('click', '[component="post/flag"]', function () {
 			var pid = getData($(this), 'data-pid');
-			var username = getData($(this), 'data-username');
-			var userslug = getData($(this), 'data-userslug');
-			require(['forum/topic/flag'], function (flag) {
-				flag.showFlagModal(pid, username, userslug);
+			require(['flags'], function (flags) {
+				flags.showFlagModal({
+					type: 'post',
+					id: pid,
+				});
 			});
 		});
 
@@ -294,7 +295,7 @@ define('forum/topic/postTools', [
 
 		socket.emit(method, {
 			pid: pid,
-			room_id: app.currentRoom,
+			room_id: 'topic_' + ajaxify.data.tid,
 		}, function (err) {
 			if (err) {
 				app.alertError(err.message);
@@ -366,7 +367,8 @@ define('forum/topic/postTools', [
 	}
 
 	function showStaleWarning(callback) {
-		if (staleReplyAnyway || ajaxify.data.lastposttime >= (Date.now() - (1000 * 60 * 60 * 24 * ajaxify.data.topicStaleDays))) {
+		var staleThreshold = Math.min(Date.now() - (1000 * 60 * 60 * 24 * ajaxify.data.topicStaleDays), 8640000000000000);
+		if (staleReplyAnyway || ajaxify.data.lastposttime >= staleThreshold) {
 			return callback();
 		}
 

@@ -13,6 +13,7 @@ var user = require('../user');
 var plugins = require('../plugins');
 var utils = require('../utils');
 var Password = require('../password');
+var translator = require('../translator');
 
 var sockets = require('../socket.io');
 
@@ -51,7 +52,7 @@ authenticationController.register = function (req, res) {
 			}
 
 			if (userData.username.length > meta.config.maximumUsernameLength) {
-				return next(new Error('[[error:username-too-long'));
+				return next(new Error('[[error:username-too-long]]'));
 			}
 
 			user.isPasswordValid(userData.password, next);
@@ -330,7 +331,7 @@ authenticationController.onSuccessfulLogin = function (req, uid, callback) {
 		// Force session check for all connected socket.io clients with the same session id
 		sockets.in('sess_' + req.sessionID).emit('checkSession', uid);
 
-		plugins.fireHook('action:user.loggedIn', uid);
+		plugins.fireHook('action:user.loggedIn', { uid: uid, req: req });
 		callback();
 	});
 };
@@ -381,20 +382,7 @@ authenticationController.localLogin = function (req, username, password, next) {
 			}
 
 			if (result.banned) {
-				// Retrieve ban reason and show error
-				return user.getLatestBanInfo(uid, function (err, banInfo) {
-					if (err) {
-						if (err.message === 'no-ban-info') {
-							next(new Error('[[error:user-banned]]'));
-						} else {
-							next(err);
-						}
-					} else if (banInfo.reason) {
-						next(new Error('[[error:user-banned-reason, ' + banInfo.reason + ']]'));
-					} else {
-						next(new Error('[[error:user-banned]]'));
-					}
-				});
+				return banUser(uid, next);
 			}
 
 			user.auth.logAttempt(uid, req.ip, next);
@@ -437,3 +425,24 @@ authenticationController.logout = function (req, res, next) {
 		res.status(200).send('');
 	}
 };
+
+function banUser(uid, next) {
+	user.getLatestBanInfo(uid, function (err, banInfo) {
+		if (err) {
+			if (err.message === 'no-ban-info') {
+				return next(new Error('[[error:user-banned]]'));
+			}
+
+			return next(err);
+		}
+
+		if (!banInfo.reason) {
+			translator.translate('[[user:info.banned-no-reason]]', function (translated) {
+				banInfo.reason = translated;
+				next(new Error(banInfo.expiry ? '[[error:user-banned-reason-until, ' + banInfo.expiry_readable + ', ' + banInfo.reason + ']]' : '[[error:user-banned-reason, ' + banInfo.reason + ']]'));
+			});
+		} else {
+			next(new Error(banInfo.expiry ? '[[error:user-banned-reason-until, ' + banInfo.expiry_readable + ', ' + banInfo.reason + ']]' : '[[error:user-banned-reason, ' + banInfo.reason + ']]'));
+		}
+	});
+}

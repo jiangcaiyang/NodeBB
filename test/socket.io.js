@@ -227,14 +227,6 @@ describe('socket.io', function () {
 		});
 	});
 
-	it('should reset flags', function (done) {
-		socketAdmin.user.resetFlags({ uid: adminUid }, [regularUid], function (err) {
-			assert.ifError(err);
-			done();
-		});
-	});
-
-
 	describe('validation emails', function () {
 		var meta = require('../src/meta');
 
@@ -340,7 +332,7 @@ describe('socket.io', function () {
 		io.emit('admin.analytics.get', { graph: 'traffic', units: 'days' }, function (err, data) {
 			assert.ifError(err);
 			assert(data);
-			assert(data.monthlyPageViews);
+			assert(data.summary);
 			done();
 		});
 	});
@@ -349,7 +341,7 @@ describe('socket.io', function () {
 		io.emit('admin.analytics.get', { graph: 'traffic', units: 'hours' }, function (err, data) {
 			assert.ifError(err);
 			assert(data);
-			assert(data.monthlyPageViews);
+			assert(data.summary);
 			done();
 		});
 	});

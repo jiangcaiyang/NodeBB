@@ -3,6 +3,7 @@
 var request = require('request');
 var nconf = require('nconf');
 var fs = require('fs');
+var winston = require('winston');
 
 var myXhr = require('../mocks/newXhr');
 var utils = require('../../public/src/utils');
@@ -104,7 +105,10 @@ helpers.uploadFile = function (uploadEndPoint, filePath, body, jar, csrf_token, 
 		if (err) {
 			return callback(err);
 		}
-		callback(err, res, body);
+		if (res.statusCode !== 200) {
+			winston.error(body);
+		}
+		callback(null, res, body);
 	});
 };
 

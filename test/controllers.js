@@ -1,7 +1,7 @@
 'use strict';
 
 var async = require('async');
-var	assert = require('assert');
+var assert = require('assert');
 var nconf = require('nconf');
 var request = require('request');
 
@@ -9,6 +9,7 @@ var db = require('./mocks/databasemock');
 var categories = require('../src/categories');
 var topics = require('../src/topics');
 var user = require('../src/user');
+var groups = require('../src/groups');
 var meta = require('../src/meta');
 var translator = require('../src/translator');
 
@@ -19,6 +20,7 @@ describe('Controllers', function () {
 	var fooUid;
 
 	before(function (done) {
+		groups.resetCache();
 		async.series({
 			category: function (next) {
 				categories.create({
@@ -355,7 +357,7 @@ describe('Controllers', function () {
 	});
 
 	it('should load stylesheet.css', function (done) {
-		request(nconf.get('url') + '/stylesheet.css', function (err, res, body) {
+		request(nconf.get('url') + '/assets/stylesheet.css', function (err, res, body) {
 			assert.ifError(err);
 			assert.equal(res.statusCode, 200);
 			assert(body);
@@ -364,7 +366,7 @@ describe('Controllers', function () {
 	});
 
 	it('should load admin.css', function (done) {
-		request(nconf.get('url') + '/admin.css', function (err, res, body) {
+		request(nconf.get('url') + '/assets/admin.css', function (err, res, body) {
 			assert.ifError(err);
 			assert.equal(res.statusCode, 200);
 			assert(body);
@@ -374,7 +376,7 @@ describe('Controllers', function () {
 
 
 	it('should load nodebb.min.js', function (done) {
-		request(nconf.get('url') + '/nodebb.min.js', function (err, res, body) {
+		request(nconf.get('url') + '/assets/nodebb.min.js', function (err, res, body) {
 			assert.ifError(err);
 			assert.equal(res.statusCode, 200);
 			assert(body);
@@ -383,7 +385,7 @@ describe('Controllers', function () {
 	});
 
 	it('should load acp.min.js', function (done) {
-		request(nconf.get('url') + '/acp.min.js', function (err, res, body) {
+		request(nconf.get('url') + '/assets/acp.min.js', function (err, res, body) {
 			assert.ifError(err);
 			assert.equal(res.statusCode, 200);
 			assert(body);
@@ -491,7 +493,6 @@ describe('Controllers', function () {
 	});
 
 	it('should load group details page', function (done) {
-		var groups = require('../src/groups');
 		groups.create({
 			name: 'group-details',
 			description: 'Foobar!',
@@ -800,6 +801,57 @@ describe('Controllers', function () {
 			});
 		});
 
+		it('should redirect to account page with logged in user', function (done) {
+			request(nconf.get('url') + '/api/login', { jar: jar, json: true }, function (err, res, body) {
+				assert.ifError(err);
+				assert.equal(res.statusCode, 308);
+				assert.equal(body, '/user/foo');
+				done();
+			});
+		});
+
+		it('should 404 if uid is not a number', function (done) {
+			request(nconf.get('url') + '/api/uid/test', { json: true }, function (err, res, body) {
+				assert.ifError(err);
+				assert.equal(res.statusCode, 404);
+				done();
+			});
+		});
+
+		it('should redirect to userslug', function (done) {
+			request(nconf.get('url') + '/api/uid/' + fooUid, { json: true }, function (err, res, body) {
+				assert.ifError(err);
+				assert.equal(res.statusCode, 308);
+				assert.equal(body, '/user/foo');
+				done();
+			});
+		});
+
+		it('should 404 if user does not exist', function (done) {
+			request(nconf.get('url') + '/api/uid/123123', { json: true }, function (err, res, body) {
+				assert.ifError(err);
+				assert.equal(res.statusCode, 404);
+				done();
+			});
+		});
+
+		it('should 401 if user is not logged in', function (done) {
+			request(nconf.get('url') + '/api/admin', { json: true }, function (err, res, body) {
+				assert.ifError(err);
+				assert.equal(res.statusCode, 401);
+				done();
+			});
+		});
+
+		it('should 403 if user is not admin', function (done) {
+			request(nconf.get('url') + '/api/admin', { jar: jar, json: true }, function (err, res, body) {
+				assert.ifError(err);
+				assert.equal(res.statusCode, 403);
+				done();
+			});
+		});
+
+
 		it('should load /user/foo/posts', function (done) {
 			request(nconf.get('url') + '/api/user/foo/posts', function (err, res, body) {
 				assert.ifError(err);
@@ -947,6 +999,35 @@ describe('Controllers', function () {
 				done();
 			});
 		});
+
+		it('should return 401 if privateUserInfo is turned on', function (done) {
+			meta.config.privateUserInfo = 1;
+			request(nconf.get('url') + '/api/user/foo', { json: true }, function (err, res, body) {
+				meta.config.privateUserInfo = 0;
+				assert.ifError(err);
+				assert.equal(res.statusCode, 401);
+				assert.equal(body, 'not-authorized');
+				done();
+			});
+		});
+
+		it('should return false if user can not edit user', function (done) {
+			user.create({ username: 'regularJoe', password: 'barbar' }, function (err) {
+				assert.ifError(err);
+				helpers.loginUser('regularJoe', 'barbar', function (err, jar) {
+					assert.ifError(err);
+					request(nconf.get('url') + '/api/user/foo/info', { jar: jar, json: true }, function (err, res) {
+						assert.ifError(err);
+						assert.equal(res.statusCode, 403);
+						request(nconf.get('url') + '/api/user/foo/edit', { jar: jar, json: true }, function (err, res) {
+							assert.ifError(err);
+							assert.equal(res.statusCode, 403);
+							done();
+						});
+					});
+				});
+			});
+		});
 	});
 
 	describe('account follow page', function () {
@@ -1060,6 +1141,152 @@ describe('Controllers', function () {
 			});
 		});
 	});
+
+	it('should return osd data', function (done) {
+		request(nconf.get('url') + '/osd.xml', function (err, res, body) {
+			assert.ifError(err);
+			assert(body);
+			done();
+		});
+	});
+
+	describe('handle errors', function () {
+		var plugins = require('../src/plugins');
+		after(function (done) {
+			plugins.loadedHooks['filter:router.page'] = undefined;
+			done();
+		});
+
+		it('should handle topic malformed uri', function (done) {
+			request(nconf.get('url') + '/topic/1/a%AFc', function (err, res, body) {
+				assert.ifError(err);
+				assert(body);
+				done();
+			});
+		});
+
+		it('should handle category malformed uri', function (done) {
+			request(nconf.get('url') + '/category/1/a%AFc', function (err, res, body) {
+				assert.ifError(err);
+				assert(body);
+				done();
+			});
+		});
+
+		it('should handle malformed uri ', function (done) {
+			request(nconf.get('url') + '/user/a%AFc', function (err, res, body) {
+				assert.ifError(err);
+				assert(body);
+				assert.equal(res.statusCode, 400);
+				done();
+			});
+		});
+
+		it('should handle malformed uri in api', function (done) {
+			request(nconf.get('url') + '/api/user/a%AFc', { json: true }, function (err, res, body) {
+				assert.ifError(err);
+				assert.equal(res.statusCode, 400);
+				assert.equal(body.error, '[[global:400.title]]');
+				done();
+			});
+		});
+
+		it('should handle CSRF error', function (done) {
+			plugins.loadedHooks['filter:router.page'] = plugins.loadedHooks['filter:router.page'] || [];
+			plugins.loadedHooks['filter:router.page'].push({
+				method: function (req, res, next) {
+					var err = new Error('csrf-error');
+					err.code = 'EBADCSRFTOKEN';
+					next(err);
+				},
+			});
+
+			request(nconf.get('url') + '/users', { }, function (err, res) {
+				plugins.loadedHooks['filter:router.page'] = [];
+				assert.ifError(err);
+				assert.equal(res.statusCode, 403);
+				done();
+			});
+		});
+
+		it('should handle black-list error', function (done) {
+			plugins.loadedHooks['filter:router.page'] = plugins.loadedHooks['filter:router.page'] || [];
+			plugins.loadedHooks['filter:router.page'].push({
+				method: function (req, res, next) {
+					var err = new Error('blacklist error message');
+					err.code = 'blacklisted-ip';
+					next(err);
+				},
+			});
+
+			request(nconf.get('url') + '/users', { }, function (err, res, body) {
+				plugins.loadedHooks['filter:router.page'] = [];
+				assert.ifError(err);
+				assert.equal(res.statusCode, 403);
+				assert.equal(body, 'blacklist error message');
+				done();
+			});
+		});
+
+		it('should handle page redirect through error', function (done) {
+			plugins.loadedHooks['filter:router.page'] = plugins.loadedHooks['filter:router.page'] || [];
+			plugins.loadedHooks['filter:router.page'].push({
+				method: function (req, res, next) {
+					var err = new Error('redirect');
+					err.status = 302;
+					err.path = '/popular';
+					plugins.loadedHooks['filter:router.page'] = [];
+					next(err);
+				},
+			});
+
+			request(nconf.get('url') + '/users', { }, function (err, res, body) {
+				assert.ifError(err);
+				assert.equal(res.statusCode, 200);
+				assert(body);
+				done();
+			});
+		});
+
+		it('should handle api page redirect through error', function (done) {
+			plugins.loadedHooks['filter:router.page'] = plugins.loadedHooks['filter:router.page'] || [];
+			plugins.loadedHooks['filter:router.page'].push({
+				method: function (req, res, next) {
+					var err = new Error('redirect');
+					err.status = 308;
+					err.path = '/api/popular';
+					plugins.loadedHooks['filter:router.page'] = [];
+					next(err);
+				},
+			});
+
+			request(nconf.get('url') + '/api/users', { json: true }, function (err, res, body) {
+				assert.ifError(err);
+				assert.equal(res.statusCode, 308);
+				assert(body, '/api/popular');
+				done();
+			});
+		});
+
+		it('should handle error page', function (done) {
+			plugins.loadedHooks['filter:router.page'] = plugins.loadedHooks['filter:router.page'] || [];
+			plugins.loadedHooks['filter:router.page'].push({
+				method: function (req, res, next) {
+					var err = new Error('regular error');
+					next(err);
+				},
+			});
+
+			request(nconf.get('url') + '/users', function (err, res, body) {
+				plugins.loadedHooks['filter:router.page'] = [];
+				assert.ifError(err);
+				assert.equal(res.statusCode, 500);
+				assert(body);
+				done();
+			});
+		});
+	});
+
 
 	after(function (done) {
 		var analytics = require('../src/analytics');

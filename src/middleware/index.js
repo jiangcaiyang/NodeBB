@@ -21,7 +21,7 @@ var controllers = {
 	helpers: require('../controllers/helpers'),
 };
 
-var middleware = {};
+var middleware = module.exports;
 
 middleware.applyCSRF = csrf();
 
@@ -33,45 +33,6 @@ require('./render')(middleware);
 require('./maintenance')(middleware);
 require('./user')(middleware);
 require('./headers')(middleware);
-
-middleware.authenticate = function (req, res, next) {
-	if (req.user) {
-		return next();
-	} else if (plugins.hasListeners('action:middleware.authenticate')) {
-		return plugins.fireHook('action:middleware.authenticate', {
-			req: req,
-			res: res,
-			next: next,
-		});
-	}
-
-	controllers.helpers.notAllowed(req, res);
-};
-
-middleware.ensureSelfOrGlobalPrivilege = function (req, res, next) {
-	/*
-		The "self" part of this middleware hinges on you having used
-		middleware.exposeUid prior to invoking this middleware.
-	*/
-	async.waterfall([
-		function (next) {
-			if (!req.uid) {
-				return setImmediate(next, null, false);
-			}
-
-			if (req.uid === parseInt(res.locals.uid, 10)) {
-				return setImmediate(next, null, true);
-			}
-			user.isAdminOrGlobalMod(req.uid, next);
-		},
-		function (isAdminOrGlobalMod, next) {
-			if (!isAdminOrGlobalMod) {
-				return controllers.helpers.notAllowed(req, res);
-			}
-			next();
-		},
-	], next);
-};
 
 middleware.pageView = function (req, res, next) {
 	analytics.pageView({
@@ -99,9 +60,9 @@ middleware.pageView = function (req, res, next) {
 middleware.pluginHooks = function (req, res, next) {
 	async.each(plugins.loadedHooks['filter:router.page'] || [], function (hookObj, next) {
 		hookObj.method(req, res, next);
-	}, function () {
+	}, function (err) {
 		// If it got here, then none of the subscribed hooks did anything, or there were no hooks
-		next();
+		next(err);
 	});
 };
 
@@ -203,6 +164,3 @@ middleware.processTimeagoLocales = function (req, res) {
 		});
 	}
 };
-
-
-module.exports = middleware;

@@ -192,7 +192,7 @@ define('forum/topic/posts', [
 				components.get('topic').append(html);
 			}
 
-			infinitescroll.removeExtra($('[component="post"]'), direction, 40);
+			infinitescroll.removeExtra($('[component="post"]'), direction, config.postsPerPage * 2);
 
 			$(window).trigger('action:posts.loaded', { posts: data.posts });
 
@@ -227,6 +227,7 @@ define('forum/topic/posts', [
 		infinitescroll.loadMore('topics.loadMore', {
 			tid: tid,
 			after: after,
+			count: config.postsPerPage,
 			direction: direction,
 			topicPostSort: config.topicPostSort,
 		}, function (data, done) {

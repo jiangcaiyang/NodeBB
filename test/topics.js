@@ -8,6 +8,7 @@ var nconf = require('nconf');
 var db = require('./mocks/databasemock');
 var topics = require('../src/topics');
 var categories = require('../src/categories');
+var meta = require('../src/meta');
 var User = require('../src/user');
 var groups = require('../src/groups');
 var helpers = require('./helpers');
@@ -526,7 +527,7 @@ describe('Topic\'s', function () {
 					topics.ignore(newTid, uid, done);
 				},
 				function (done) {
-					topics.getUnreadTopics(0, uid, 0, -1, '', done);
+					topics.getUnreadTopics({ cid: 0, uid: uid, start: 0, stop: -1, filter: '' }, done);
 				},
 				function (results, done) {
 					var topics = results.topics;
@@ -570,7 +571,7 @@ describe('Topic\'s', function () {
 					topics.follow(newTid, uid, done);
 				},
 				function (done) {
-					topics.getUnreadTopics(0, uid, 0, -1, '', done);
+					topics.getUnreadTopics({ cid: 0, uid: uid, start: 0, stop: -1, filter: '' }, done);
 				},
 				function (results, done) {
 					var topics = results.topics;
@@ -590,7 +591,7 @@ describe('Topic\'s', function () {
 					topics.follow(newTid, uid, done);
 				},
 				function (done) {
-					topics.getUnreadTopics(0, uid, 0, -1, '', done);
+					topics.getUnreadTopics({ cid: 0, uid: uid, start: 0, stop: -1, filter: '' }, done);
 				},
 				function (results, done) {
 					var topics = results.topics;
@@ -902,7 +903,7 @@ describe('Topic\'s', function () {
 		});
 
 		it('should infinite load topic posts', function (done) {
-			socketTopics.loadMore({ uid: adminUid }, { tid: tid, after: 0 }, function (err, data) {
+			socketTopics.loadMore({ uid: adminUid }, { tid: tid, after: 0, count: 10 }, function (err, data) {
 				assert.ifError(err);
 				assert(data.mainPost);
 				assert(data.posts);
@@ -921,7 +922,7 @@ describe('Topic\'s', function () {
 		it('should load more unread topics', function (done) {
 			socketTopics.markUnread({ uid: adminUid }, tid, function (err) {
 				assert.ifError(err);
-				socketTopics.loadMoreUnreadTopics({ uid: adminUid }, { cid: topic.categoryId, after: 0 }, function (err, data) {
+				socketTopics.loadMoreUnreadTopics({ uid: adminUid }, { cid: topic.categoryId, after: 0, count: 10 }, function (err, data) {
 					assert.ifError(err);
 					assert(data);
 					assert(Array.isArray(data.topics));
@@ -939,7 +940,7 @@ describe('Topic\'s', function () {
 
 
 		it('should load more recent topics', function (done) {
-			socketTopics.loadMoreRecentTopics({ uid: adminUid }, { cid: topic.categoryId, after: 0 }, function (err, data) {
+			socketTopics.loadMoreRecentTopics({ uid: adminUid }, { cid: topic.categoryId, after: 0, count: 10 }, function (err, data) {
 				assert.ifError(err);
 				assert(data);
 				assert(Array.isArray(data.topics));
@@ -955,7 +956,7 @@ describe('Topic\'s', function () {
 		});
 
 		it('should load more from custom set', function (done) {
-			socketTopics.loadMoreFromSet({ uid: adminUid }, { set: 'uid:' + adminUid + ':topics', after: 0 }, function (err, data) {
+			socketTopics.loadMoreFromSet({ uid: adminUid }, { set: 'uid:' + adminUid + ':topics', after: 0, count: 10 }, function (err, data) {
 				assert.ifError(err);
 				assert(data);
 				assert(Array.isArray(data.topics));
@@ -1521,6 +1522,117 @@ describe('Topic\'s', function () {
 			assert.ifError(err);
 			assert(!isModerator);
 			done();
+		});
+	});
+
+	describe('teasers', function () {
+		var topic1;
+		var topic2;
+		before(function (done) {
+			async.series([
+				function (next) {
+					topics.post({ uid: adminUid, title: 'topic 1', content: 'content 1', cid: categoryObj.cid }, next);
+				},
+				function (next) {
+					topics.post({ uid: adminUid, title: 'topic 2', content: 'content 2', cid: categoryObj.cid }, next);
+				},
+			], function (err, results) {
+				assert.ifError(err);
+				topic1 = results[0];
+				topic2 = results[1];
+				done();
+			});
+		});
+
+		after(function (done) {
+			meta.config.teaserPost = '';
+			done();
+		});
+
+
+		it('should return empty array if first param is empty', function (done) {
+			topics.getTeasers([], function (err, teasers) {
+				assert.ifError(err);
+				assert.equal(0, teasers.length);
+				done();
+			});
+		});
+
+		it('should get teasers with 2 params', function (done) {
+			topics.getTeasers([topic1.topicData, topic2.topicData], function (err, teasers) {
+				assert.ifError(err);
+				assert.deepEqual([undefined, undefined], teasers);
+				done();
+			});
+		});
+
+		it('should get teasers with first posts', function (done) {
+			meta.config.teaserPost = 'first';
+			topics.getTeasers([topic1.topicData, topic2.topicData], function (err, teasers) {
+				assert.ifError(err);
+				assert.equal(2, teasers.length);
+				assert(teasers[0]);
+				assert(teasers[1]);
+				assert(teasers[0].tid, topic1.topicData.tid);
+				assert(teasers[0].content, 'content 1');
+				assert(teasers[0].user.username, 'admin');
+				done();
+			});
+		});
+
+		it('should get teasers even if one topic is falsy', function (done) {
+			topics.getTeasers([null, topic2.topicData], function (err, teasers) {
+				assert.ifError(err);
+				assert.equal(2, teasers.length);
+				assert.equal(undefined, teasers[0]);
+				assert(teasers[1]);
+				assert(teasers[1].tid, topic2.topicData.tid);
+				assert(teasers[1].content, 'content 2');
+				assert(teasers[1].user.username, 'admin');
+				done();
+			});
+		});
+
+		it('should get teasers with first posts', function (done) {
+			meta.config.teaserPost = 'last-post';
+			topics.reply({ uid: adminUid, content: 'reply 1 content', tid: topic1.topicData.tid }, function (err, result) {
+				assert.ifError(err);
+				topic1.topicData.teaserPid = result.pid;
+				topics.getTeasers([topic1.topicData, topic2.topicData], function (err, teasers) {
+					assert.ifError(err);
+					assert(teasers[0]);
+					assert(teasers[1]);
+					assert(teasers[0].tid, topic1.topicData.tid);
+					assert(teasers[0].content, 'reply 1 content');
+					done();
+				});
+			});
+		});
+
+		it('should get teasers by tids', function (done) {
+			topics.getTeasersByTids([topic2.topicData.tid, topic1.topicData.tid], function (err, teasers) {
+				assert.ifError(err);
+				assert(2, teasers.length);
+				assert.equal(teasers[1].content, 'reply 1 content');
+				done();
+			});
+		});
+
+		it('should return empty array ', function (done) {
+			topics.getTeasersByTids([], function (err, teasers) {
+				assert.ifError(err);
+				assert.equal(0, teasers.length);
+				done();
+			});
+		});
+
+		it('should get teaser by tid', function (done) {
+			topics.getTeaser(topic2.topicData.tid, function (err, teaser) {
+				assert.ifError(err);
+				assert(teaser);
+				assert.equal(teaser.content, 'content 2');
+				done();
+			});
 		});
 	});
 

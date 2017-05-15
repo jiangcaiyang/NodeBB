@@ -95,7 +95,7 @@ describe('User', function () {
 						assert.ifError(err);
 
 						assert.strictEqual(username, 'Jane Doe 9');
-						done();
+						next();
 					});
 				},
 			], done);
@@ -299,7 +299,7 @@ describe('User', function () {
 		});
 
 		it('.send() should create a new reset code and reset password', function (done) {
-			User.reset.send('reset@me.com', function (err, code) {
+			User.reset.send('reset@me.com', function (err) {
 				if (err) {
 					console.log(err);
 				}
@@ -751,7 +751,28 @@ describe('User', function () {
 		});
 	});
 
-	describe('.getModerationHistory', function () {
+	describe('user info', function () {
+		it('should return error if there is no ban reason', function (done) {
+			User.getLatestBanInfo(123, function (err) {
+				assert.equal(err.message, 'no-ban-info');
+				done();
+			});
+		});
+
+
+		it('should get history from set', function (done) {
+			var now = Date.now();
+			db.sortedSetAdd('user:' + testUid + ':usernames', now, 'derp:' + now, function (err) {
+				assert.ifError(err);
+				User.getHistory('user:' + testUid + ':usernames', function (err, data) {
+					assert.ifError(err);
+					assert.equal(data[0].value, 'derp');
+					assert.equal(data[0].timestamp, now);
+					done();
+				});
+			});
+		});
+
 		it('should return the correct ban reason', function (done) {
 			async.series([
 				function (next) {
@@ -775,6 +796,42 @@ describe('User', function () {
 					assert.ifError(err);
 					done();
 				});
+			});
+		});
+
+		it('should ban user permanently', function (done) {
+			User.ban(testUid, function (err) {
+				assert.ifError(err);
+				User.isBanned(testUid, function (err, isBanned) {
+					assert.ifError(err);
+					assert.equal(isBanned, true);
+					User.unban(testUid, done);
+				});
+			});
+		});
+
+		it('should ban user temporarily', function (done) {
+			User.ban(testUid, Date.now() + 2000, function (err) {
+				assert.ifError(err);
+
+				User.isBanned(testUid, function (err, isBanned) {
+					assert.ifError(err);
+					assert.equal(isBanned, true);
+					setTimeout(function () {
+						User.isBanned(testUid, function (err, isBanned) {
+							assert.ifError(err);
+							assert.equal(isBanned, false);
+							User.unban(testUid, done);
+						});
+					}, 3000);
+				});
+			});
+		});
+
+		it('should error if until is NaN', function (done) {
+			User.ban(testUid, 'asd', function (err) {
+				assert.equal(err.message, '[[error:ban-expiry-missing]]');
+				done();
 			});
 		});
 	});
@@ -945,24 +1002,42 @@ describe('User', function () {
 			};
 			socketUser.saveSettings({ uid: testUid }, data, function (err) {
 				assert.ifError(err);
-				done();
+				User.getSettings(testUid, function (err, data) {
+					assert.ifError(err);
+					assert.equal(data.usePagination, true);
+					done();
+				});
 			});
 		});
 
 		it('should set moderation note', function (done) {
-			User.create({ username: 'noteadmin' }, function (err, adminUid) {
+			var adminUid;
+			async.waterfall([
+				function (next) {
+					User.create({ username: 'noteadmin' }, next);
+				},
+				function (_adminUid, next) {
+					adminUid = _adminUid;
+					groups.join('administrators', adminUid, next);
+				},
+				function (next) {
+					socketUser.setModerationNote({ uid: adminUid }, { uid: testUid, note: 'this is a test user' }, next);
+				},
+				function (next) {
+					setTimeout(next, 50);
+				},
+				function (next) {
+					socketUser.setModerationNote({ uid: adminUid }, { uid: testUid, note: 'second moderation note' }, next);
+				},
+				function (next) {
+					User.getModerationNotes(testUid, 0, -1, next);
+				},
+			], function (err, notes) {
 				assert.ifError(err);
-				groups.join('administrators', adminUid, function (err) {
-					assert.ifError(err);
-					socketUser.setModerationNote({ uid: adminUid }, { uid: testUid, note: 'this is a test user' }, function (err) {
-						assert.ifError(err);
-						User.getUserField(testUid, 'moderationNote', function (err, note) {
-							assert.ifError(err);
-							assert.equal(note, 'this is a test user');
-							done();
-						});
-					});
-				});
+				assert.equal(notes[0].note, 'second moderation note');
+				assert.equal(notes[0].uid, adminUid);
+				assert(notes[0].timestamp);
+				done();
 			});
 		});
 	});
