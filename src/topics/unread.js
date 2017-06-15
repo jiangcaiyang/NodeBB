@@ -50,7 +50,7 @@ module.exports = function (Topics) {
 				Topics.getTopicsByTids(tids, params.uid, next);
 			},
 			function (topicData, next) {
-				if (!Array.isArray(topicData) || !topicData.length) {
+				if (!topicData.length) {
 					return next(null, unreadTopics);
 				}
 
@@ -267,6 +267,7 @@ module.exports = function (Topics) {
 				categories.markAsRead(cids, uid, next);
 			},
 			function (next) {
+				plugins.fireHook('action:topics.markAsRead', { uid: uid, tids: tids });
 				next(null, true);
 			},
 		], callback);
@@ -325,30 +326,31 @@ module.exports = function (Topics) {
 			}));
 		}
 
-		async.parallel({
-			recentScores: function (next) {
-				db.sortedSetScores('topics:recent', tids, next);
+		async.waterfall([
+			function (next) {
+				async.parallel({
+					recentScores: function (next) {
+						db.sortedSetScores('topics:recent', tids, next);
+					},
+					userScores: function (next) {
+						db.sortedSetScores('uid:' + uid + ':tids_read', tids, next);
+					},
+					tids_unread: function (next) {
+						db.sortedSetScores('uid:' + uid + ':tids_unread', tids, next);
+					},
+				}, next);
 			},
-			userScores: function (next) {
-				db.sortedSetScores('uid:' + uid + ':tids_read', tids, next);
-			},
-			tids_unread: function (next) {
-				db.sortedSetScores('uid:' + uid + ':tids_unread', tids, next);
-			},
-		}, function (err, results) {
-			if (err) {
-				return callback(err);
-			}
+			function (results, next) {
+				var cutoff = Topics.unreadCutoff();
+				var result = tids.map(function (tid, index) {
+					return !results.tids_unread[index] &&
+						(results.recentScores[index] < cutoff ||
+						!!(results.userScores[index] && results.userScores[index] >= results.recentScores[index]));
+				});
 
-			var cutoff = Topics.unreadCutoff();
-			var result = tids.map(function (tid, index) {
-				return !results.tids_unread[index] &&
-					(results.recentScores[index] < cutoff ||
-					!!(results.userScores[index] && results.userScores[index] >= results.recentScores[index]));
-			});
-
-			callback(null, result);
-		});
+				next(null, result);
+			},
+		], callback);
 	};
 
 	Topics.hasReadTopic = function (tid, uid, callback) {

@@ -348,6 +348,22 @@ describe('Groups', function () {
 				done();
 			});
 		});
+
+		it('should fail to rename group to an existing group', function (done) {
+			Groups.create({
+				name: 'group2',
+				system: 0,
+				hidden: 0,
+			}, function (err) {
+				assert.ifError(err);
+				Groups.update('group2', {
+					name: 'updateTestGroup?',
+				}, function (err) {
+					assert.equal(err.message, '[[error:group-already-exists]]');
+					done();
+				});
+			});
+		});
 	});
 
 	describe('.destroy()', function () {
@@ -420,10 +436,10 @@ describe('Groups', function () {
 				var	groups = ['Test', 'Hidden'];
 				async.every(groups, function (group, next) {
 					Groups.isMember(testUid, group, function (err, isMember) {
-						assert.ifError(err);
-						next(!isMember);
+						next(err, !isMember);
 					});
-				}, function (result) {
+				}, function (err, result) {
+					assert.ifError(err);
 					assert(result);
 
 					done();
@@ -1172,9 +1188,5 @@ describe('Groups', function () {
 				});
 			});
 		});
-	});
-
-	after(function (done) {
-		db.emptydb(done);
 	});
 });

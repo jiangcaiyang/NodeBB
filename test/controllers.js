@@ -8,16 +8,20 @@ var request = require('request');
 var db = require('./mocks/databasemock');
 var categories = require('../src/categories');
 var topics = require('../src/topics');
+var posts = require('../src/posts');
 var user = require('../src/user');
 var groups = require('../src/groups');
 var meta = require('../src/meta');
 var translator = require('../src/translator');
+var privileges = require('../src/privileges');
+var helpers = require('./helpers');
 
 describe('Controllers', function () {
 	var tid;
 	var cid;
 	var pid;
 	var fooUid;
+	var category;
 
 	before(function (done) {
 		groups.resetCache();
@@ -41,6 +45,7 @@ describe('Controllers', function () {
 			if (err) {
 				return done(err);
 			}
+			category = results.category;
 			cid = results.category.cid;
 			fooUid = results.user;
 
@@ -586,7 +591,7 @@ describe('Controllers', function () {
 		var uid;
 		var jar;
 		var csrf_token;
-		var helpers = require('./helpers');
+
 		before(function (done) {
 			user.create({ username: 'revokeme', password: 'barbar' }, function (err, _uid) {
 				assert.ifError(err);
@@ -791,7 +796,6 @@ describe('Controllers', function () {
 	});
 
 	describe('account pages', function () {
-		var helpers = require('./helpers');
 		var jar;
 		before(function (done) {
 			helpers.loginUser('foo', 'barbar', function (err, _jar) {
@@ -811,7 +815,7 @@ describe('Controllers', function () {
 		});
 
 		it('should 404 if uid is not a number', function (done) {
-			request(nconf.get('url') + '/api/uid/test', { json: true }, function (err, res, body) {
+			request(nconf.get('url') + '/api/uid/test', { json: true }, function (err, res) {
 				assert.ifError(err);
 				assert.equal(res.statusCode, 404);
 				done();
@@ -828,7 +832,7 @@ describe('Controllers', function () {
 		});
 
 		it('should 404 if user does not exist', function (done) {
-			request(nconf.get('url') + '/api/uid/123123', { json: true }, function (err, res, body) {
+			request(nconf.get('url') + '/api/uid/123123', { json: true }, function (err, res) {
 				assert.ifError(err);
 				assert.equal(res.statusCode, 404);
 				done();
@@ -836,7 +840,7 @@ describe('Controllers', function () {
 		});
 
 		it('should 401 if user is not logged in', function (done) {
-			request(nconf.get('url') + '/api/admin', { json: true }, function (err, res, body) {
+			request(nconf.get('url') + '/api/admin', { json: true }, function (err, res) {
 				assert.ifError(err);
 				assert.equal(res.statusCode, 401);
 				done();
@@ -844,7 +848,7 @@ describe('Controllers', function () {
 		});
 
 		it('should 403 if user is not admin', function (done) {
-			request(nconf.get('url') + '/api/admin', { jar: jar, json: true }, function (err, res, body) {
+			request(nconf.get('url') + '/api/admin', { jar: jar, json: true }, function (err, res) {
 				assert.ifError(err);
 				assert.equal(res.statusCode, 403);
 				done();
@@ -1026,6 +1030,151 @@ describe('Controllers', function () {
 						});
 					});
 				});
+			});
+		});
+
+		it('should load correct user', function (done) {
+			request(nconf.get('url') + '/api/user/FOO', { jar: jar, json: true }, function (err, res) {
+				assert.ifError(err);
+				assert.equal(res.statusCode, 200);
+				done();
+			});
+		});
+
+		it('should redirect', function (done) {
+			request(nconf.get('url') + '/user/FOO', { jar: jar }, function (err, res, body) {
+				assert.ifError(err);
+				assert.equal(res.statusCode, 200);
+				assert(body);
+				done();
+			});
+		});
+
+		it('should 404 if user does not exist', function (done) {
+			request(nconf.get('url') + '/api/user/doesnotexist', { jar: jar }, function (err, res) {
+				assert.ifError(err);
+				assert.equal(res.statusCode, 404);
+				done();
+			});
+		});
+
+		it('should increase profile view', function (done) {
+			request(nconf.get('url') + '/api/user/foo', { }, function (err, res) {
+				assert.ifError(err);
+				assert.equal(res.statusCode, 200);
+				user.getUserField(fooUid, 'profileviews', function (err, viewcount) {
+					assert.ifError(err);
+					assert(viewcount > 0);
+					done();
+				});
+			});
+		});
+
+		it('should parse about me', function (done) {
+			user.setUserFields(fooUid, { picture: '/path/to/picture', aboutme: 'hi i am a bot' }, function (err) {
+				assert.ifError(err);
+				request(nconf.get('url') + '/api/user/foo', { json: true }, function (err, res, body) {
+					assert.ifError(err);
+					assert.equal(res.statusCode, 200);
+					assert.equal(body.aboutme, 'hi i am a bot');
+					assert.equal(body.picture, '/path/to/picture');
+					done();
+				});
+			});
+		});
+
+		it('should not return reputation if reputation is disabled', function (done) {
+			meta.config['reputation:disabled'] = 1;
+			request(nconf.get('url') + '/api/user/foo', { json: true }, function (err, res, body) {
+				meta.config['reputation:disabled'] = 0;
+				assert.ifError(err);
+				assert.equal(res.statusCode, 200);
+				assert(!body.hasOwnProperty('reputation'));
+				done();
+			});
+		});
+
+		it('should only return posts that are not deleted', function (done) {
+			var topicData;
+			var pidToDelete;
+			async.waterfall([
+				function (next) {
+					topics.post({ uid: fooUid, title: 'visible', content: 'some content', cid: cid }, next);
+				},
+				function (data, next) {
+					topicData = data.topicData;
+					topics.reply({ uid: fooUid, content: '1st reply', tid: topicData.tid }, next);
+				},
+				function (postData, next) {
+					pidToDelete = postData.pid;
+					topics.reply({ uid: fooUid, content: '2nd reply', tid: topicData.tid }, next);
+				},
+				function (postData, next) {
+					posts.delete(pidToDelete, fooUid, next);
+				},
+				function (next) {
+					request(nconf.get('url') + '/api/user/foo', { json: true }, function (err, res, body) {
+						assert.ifError(err);
+						assert.equal(res.statusCode, 200);
+						var contents = body.posts.map(function (p) {
+							return p.content;
+						});
+						assert(contents.indexOf('1st reply') === -1);
+						done();
+					});
+				},
+			], done);
+		});
+
+		it('should return selected group title', function (done) {
+			groups.create({
+				name: 'selectedGroup',
+			}, function (err) {
+				assert.ifError(err);
+				groups.join('selectedGroup', fooUid, function (err) {
+					assert.ifError(err);
+					request(nconf.get('url') + '/api/user/foo', { json: true }, function (err, res, body) {
+						assert.ifError(err);
+						assert.equal(res.statusCode, 200);
+						assert(body.selectedGroup.name, 'selectedGroup');
+						done();
+					});
+				});
+			});
+		});
+
+		it('should 404 if user does not exist', function (done) {
+			groups.join('administrators', fooUid, function (err) {
+				assert.ifError(err);
+				request(nconf.get('url') + '/api/user/doesnotexist/edit', { jar: jar, json: true }, function (err, res, body) {
+					assert.ifError(err);
+					assert.equal(res.statusCode, 404);
+					groups.leave('administrators', fooUid, done);
+				});
+			});
+		});
+
+		it('should render edit/password', function (done) {
+			request(nconf.get('url') + '/api/user/foo/edit/password', { jar: jar, json: true }, function (err, res, body) {
+				assert.ifError(err);
+				assert.equal(res.statusCode, 200);
+				done();
+			});
+		});
+
+		it('should render edit/email', function (done) {
+			request(nconf.get('url') + '/api/user/foo/edit/email', { jar: jar, json: true }, function (err, res, body) {
+				assert.ifError(err);
+				assert.equal(res.statusCode, 200);
+				done();
+			});
+		});
+
+		it('should render edit/username', function (done) {
+			request(nconf.get('url') + '/api/user/foo/edit/username', { jar: jar, json: true }, function (err, res, body) {
+				assert.ifError(err);
+				assert.equal(res.statusCode, 200);
+				done();
 			});
 		});
 	});
@@ -1287,12 +1436,335 @@ describe('Controllers', function () {
 		});
 	});
 
+	describe('timeago locales', function () {
+		it('should load timeago locale', function (done) {
+			request(nconf.get('url') + '/assets/vendor/jquery/timeago/locales/jquery.timeago.af.js', function (err, res, body) {
+				assert.ifError(err);
+				assert.equal(res.statusCode, 200);
+				assert(body.indexOf('Afrikaans') !== -1);
+				done();
+			});
+		});
+
+		it('should load timeago locale', function (done) {
+			request(nconf.get('url') + '/assets/vendor/jquery/timeago/locales/jquery.timeago.404.js', function (err, res, body) {
+				assert.ifError(err);
+				assert.equal(res.statusCode, 200);
+				assert(body.indexOf('English') !== -1);
+				done();
+			});
+		});
+	});
+
+	describe('category', function () {
+		var jar;
+		before(function (done) {
+			helpers.loginUser('foo', 'barbar', function (err, _jar) {
+				assert.ifError(err);
+				jar = _jar;
+				done();
+			});
+		});
+
+		it('should return 404 if cid is not a number', function (done) {
+			request(nconf.get('url') + '/api/category/fail', function (err, res) {
+				assert.ifError(err);
+				assert.equal(res.statusCode, 404);
+				done();
+			});
+		});
+
+		it('should return 404 if topic index is not a number', function (done) {
+			request(nconf.get('url') + '/api/category/' + category.slug + '/invalidtopicindex', function (err, res) {
+				assert.ifError(err);
+				assert.equal(res.statusCode, 404);
+				done();
+			});
+		});
+
+		it('should 404 if category does not exist', function (done) {
+			request(nconf.get('url') + '/api/category/123123', function (err, res) {
+				assert.ifError(err);
+				assert.equal(res.statusCode, 404);
+				done();
+			});
+		});
+
+		it('should 404 if category is disabled', function (done) {
+			categories.create({ name: 'disabled' }, function (err, category) {
+				assert.ifError(err);
+				categories.setCategoryField(category.cid, 'disabled', 1, function (err) {
+					assert.ifError(err);
+					request(nconf.get('url') + '/api/category/' + category.slug, function (err, res) {
+						assert.ifError(err);
+						assert.equal(res.statusCode, 404);
+						done();
+					});
+				});
+			});
+		});
+
+		it('should return 401 if not allowed to read', function (done) {
+			categories.create({ name: 'hidden' }, function (err, category) {
+				assert.ifError(err);
+				privileges.categories.rescind(['read'], category.cid, 'guests', function (err) {
+					assert.ifError(err);
+					request(nconf.get('url') + '/api/category/' + category.slug, function (err, res) {
+						assert.ifError(err);
+						assert.equal(res.statusCode, 401);
+						done();
+					});
+				});
+			});
+		});
+
+		it('should redirect if topic index is negative', function (done) {
+			request(nconf.get('url') + '/api/category/' + category.slug + '/-10', function (err, res) {
+				assert.ifError(err);
+				assert.equal(res.statusCode, 308);
+				done();
+			});
+		});
+
+		it('should 404 if page is not found', function (done) {
+			user.setSetting(fooUid, 'usePagination', 1, function (err) {
+				assert.ifError(err);
+				request(nconf.get('url') + '/api/category/' + category.slug + '?page=100', { jar: jar, json: true }, function (err, res) {
+					assert.ifError(err);
+					assert.equal(res.statusCode, 404);
+					done();
+				});
+			});
+		});
+
+		it('should load page 1 if req.query.page is not sent', function (done) {
+			request(nconf.get('url') + '/api/category/' + category.slug, { jar: jar, json: true }, function (err, res, body) {
+				assert.ifError(err);
+				assert.equal(res.statusCode, 200);
+				assert.equal(body.pagination.currentPage, 1);
+				done();
+			});
+		});
+
+		it('should sort topics by most posts', function (done) {
+			async.waterfall([
+				function (next) {
+					categories.create({ name: 'most-posts-category' }, next);
+				},
+				function (category, next) {
+					async.waterfall([
+						function (next) {
+							topics.post({ uid: fooUid, cid: category.cid, title: 'topic 1', content: 'topic 1 OP' }, next);
+						},
+						function (data, next) {
+							topics.post({ uid: fooUid, cid: category.cid, title: 'topic 2', content: 'topic 2 OP' }, next);
+						},
+						function (data, next) {
+							topics.reply({ uid: fooUid, content: 'topic 2 reply', tid: data.topicData.tid }, next);
+						},
+						function (postData, next) {
+							request(nconf.get('url') + '/api/category/' + category.slug + '?sort=most_posts', { jar: jar, json: true }, function (err, res, body) {
+								assert.ifError(err);
+								assert.equal(res.statusCode, 200);
+								assert.equal(body.topics[0].title, 'topic 2');
+								assert.equal(body.topics[0].postcount, 2);
+								assert.equal(body.topics[1].postcount, 1);
+								next();
+							});
+						},
+					], function (err) {
+						next(err);
+					});
+				},
+			], done);
+		});
+
+		it('should load a specific users topics from a category with tags', function (done) {
+			async.waterfall([
+				function (next) {
+					categories.create({ name: 'filtered-category' }, next);
+				},
+				function (category, next) {
+					async.waterfall([
+						function (next) {
+							topics.post({ uid: fooUid, cid: category.cid, title: 'topic 1', content: 'topic 1 OP', tags: ['java', 'cpp'] }, next);
+						},
+						function (data, next) {
+							topics.post({ uid: fooUid, cid: category.cid, title: 'topic 2', content: 'topic 2 OP', tags: ['node', 'javascript'] }, next);
+						},
+						function (data, next) {
+							topics.post({ uid: fooUid, cid: category.cid, title: 'topic 3', content: 'topic 3 OP', tags: ['java', 'cpp', 'best'] }, next);
+						},
+						function (data, next) {
+							request(nconf.get('url') + '/api/category/' + category.slug + '?tag=node&author=foo', { jar: jar, json: true }, function (err, res, body) {
+								assert.ifError(err);
+								assert.equal(res.statusCode, 200);
+								assert.equal(body.topics[0].title, 'topic 2');
+								next();
+							});
+						},
+						function (next) {
+							request(nconf.get('url') + '/api/category/' + category.slug + '?tag[]=java&tag[]=cpp', { jar: jar, json: true }, function (err, res, body) {
+								assert.ifError(err);
+								assert.equal(res.statusCode, 200);
+								assert.equal(body.topics[0].title, 'topic 3');
+								assert.equal(body.topics[1].title, 'topic 1');
+								next();
+							});
+						},
+					], function (err) {
+						next(err);
+					});
+				},
+			], done);
+		});
+
+		it('should redirect if category is a link', function (done) {
+			async.waterfall([
+				function (next) {
+					categories.create({ name: 'redirect', link: 'https://nodebb.org' }, next);
+				},
+				function (category, next) {
+					request(nconf.get('url') + '/api/category/' + category.slug, { jar: jar, json: true }, function (err, res, body) {
+						assert.ifError(err);
+						assert.equal(res.statusCode, 308);
+						assert.equal(body, 'https://nodebb.org');
+						next();
+					});
+				},
+			], done);
+		});
+
+		it('should get recent topic replies from children categories', function (done) {
+			var parentCategory;
+			var childCategory1;
+			var childCategory2;
+
+			async.waterfall([
+				function (next) {
+					categories.create({ name: 'parent category', backgroundImage: 'path/to/some/image' }, next);
+				},
+				function (category, next) {
+					parentCategory = category;
+					async.waterfall([
+						function (next) {
+							categories.create({ name: 'child category 1', parentCid: category.cid }, next);
+						},
+						function (category, next) {
+							childCategory1 = category;
+							categories.create({ name: 'child category 2', parentCid: parentCategory.cid }, next);
+						},
+						function (category, next) {
+							childCategory2 = category;
+							topics.post({ uid: fooUid, cid: childCategory2.cid, title: 'topic 1', content: 'topic 1 OP' }, next);
+						},
+						function (data, next) {
+							request(nconf.get('url') + '/api/category/' + parentCategory.slug, { jar: jar, json: true }, function (err, res, body) {
+								assert.ifError(err);
+								assert.equal(res.statusCode, 200);
+								assert.equal(body.children[1].posts[0].content, 'topic 1 OP');
+								next();
+							});
+						},
+					], function (err) {
+						next(err);
+					});
+				},
+			], done);
+		});
+
+		it('should create 2 pages of topics', function (done) {
+			async.waterfall([
+				function (next) {
+					categories.create({ name: 'category with 2 pages' }, next);
+				},
+				function (category, next) {
+					var titles = [];
+					for (var i = 0; i < 30; i++) {
+						titles.push('topic title ' + i);
+					}
+
+					async.waterfall([
+						function (next) {
+							async.eachSeries(titles, function (title, next) {
+								topics.post({ uid: fooUid, cid: category.cid, title: title, content: 'does not really matter' }, next);
+							}, next);
+						},
+						function (next) {
+							user.getSettings(fooUid, next);
+						},
+						function (settings, next) {
+							request(nconf.get('url') + '/api/category/' + category.slug, { jar: jar, json: true }, function (err, res, body) {
+								assert.ifError(err);
+								assert.equal(res.statusCode, 200);
+								assert.equal(body.topics.length, settings.topicsPerPage);
+								assert.equal(body.pagination.pageCount, 2);
+								next();
+							});
+						},
+					], function (err) {
+						next(err);
+					});
+				},
+			], done);
+		});
+	});
+
+	describe('unread', function () {
+		var jar;
+		before(function (done) {
+			helpers.loginUser('foo', 'barbar', function (err, _jar) {
+				assert.ifError(err);
+				jar = _jar;
+				done();
+			});
+		});
+
+		it('should load unread page', function (done) {
+			request(nconf.get('url') + '/api/unread', { jar: jar }, function (err, res) {
+				assert.ifError(err);
+				assert.equal(res.statusCode, 200);
+				done();
+			});
+		});
+
+		it('should 404 if filter is invalid', function (done) {
+			request(nconf.get('url') + '/api/unread/doesnotexist', { jar: jar }, function (err, res) {
+				assert.ifError(err);
+				assert.equal(res.statusCode, 404);
+				done();
+			});
+		});
+
+		it('should 404 if filter is invalid', function (done) {
+			request(nconf.get('url') + '/api/unread/doesnotexist/total', { jar: jar }, function (err, res) {
+				assert.ifError(err);
+				assert.equal(res.statusCode, 404);
+				done();
+			});
+		});
+
+		it('should return total unread count', function (done) {
+			request(nconf.get('url') + '/api/unread/new/total', { jar: jar }, function (err, res, body) {
+				assert.ifError(err);
+				assert.equal(res.statusCode, 200);
+				assert.equal(body, 0);
+				done();
+			});
+		});
+
+		it('should redirect if page is out of bounds', function (done) {
+			request(nconf.get('url') + '/api/unread?page=-1', { jar: jar }, function (err, res, body) {
+				assert.ifError(err);
+				assert.equal(res.statusCode, 308);
+				assert.equal(body, '"/unread?page=1"');
+				done();
+			});
+		});
+	});
 
 	after(function (done) {
 		var analytics = require('../src/analytics');
-		analytics.writeData(function (err) {
-			assert.ifError(err);
-			db.emptydb(done);
-		});
+		analytics.writeData(done);
 	});
 });

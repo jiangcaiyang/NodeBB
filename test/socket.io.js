@@ -346,6 +346,18 @@ describe('socket.io', function () {
 		});
 	});
 
+	it('should allow a custom date range for traffic graph analytics', function (done) {
+		io.emit('admin.analytics.get', { graph: 'traffic', units: 'days', amount: '7' }, function (err, data) {
+			assert.ifError(err);
+			assert(data);
+			assert(data.pageviews);
+			assert(data.uniqueVisitors);
+			assert.strictEqual(7, data.pageviews.length);
+			assert.strictEqual(7, data.uniqueVisitors.length);
+			done();
+		});
+	});
+
 	it('should return error', function (done) {
 		socketAdmin.before({ uid: 10 }, 'someMethod', {}, function (err) {
 			assert.equal(err.message, '[[error:no-privileges]]');
@@ -473,6 +485,7 @@ describe('socket.io', function () {
 		var data = [
 			{ name: 'nodebb-theme-persona', order: 0 },
 			{ name: 'nodebb-plugin-dbsearch', order: 1 },
+			{ name: 'nodebb-plugin-soundpack-default', order: 2 },
 			{ ignoreme: 'wrong data' },
 		];
 		socketAdmin.plugins.orderActivePlugins({ uid: adminUid }, data, function (err) {
@@ -572,10 +585,6 @@ describe('socket.io', function () {
 				done();
 			});
 		});
-	});
-
-	after(function (done) {
-		db.emptydb(done);
 	});
 });
 

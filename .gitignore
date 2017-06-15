@@ -1,3 +1,4 @@
+yarn.lock
 npm-debug.log
 node_modules/
 sftp-config.json
@@ -17,6 +18,7 @@ provision.sh
 .DS_Store
 feeds/recent.rss
 .eslintcache
+.svn
 
 logs/
 
@@ -60,3 +62,5 @@ coverage
 ## Local uploads
 /public/uploads/
 /public/qtdream-player/
+test/files/normalise.jpg.png
+test/files/normalise-resized.jpg

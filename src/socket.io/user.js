@@ -75,18 +75,7 @@ SocketUser.emailConfirm = function (socket, data, callback) {
 		return callback(new Error('[[error:email-confirmations-are-disabled]]'));
 	}
 
-	async.waterfall([
-		function (next) {
-			user.getUserField(socket.uid, 'email', next);
-		},
-		function (email, next) {
-			if (!email) {
-				return callback();
-			}
-
-			user.email.sendValidationEmail(socket.uid, email, next);
-		},
-	], callback);
+	user.email.sendValidationEmail(socket.uid, callback);
 };
 
 
@@ -197,17 +186,18 @@ SocketUser.unfollow = function (socket, data, callback) {
 };
 
 function toggleFollow(method, uid, theiruid, callback) {
-	user[method](uid, theiruid, function (err) {
-		if (err) {
-			return callback(err);
-		}
-
-		plugins.fireHook('action:user.' + method, {
-			fromUid: uid,
-			toUid: theiruid,
-		});
-		callback();
-	});
+	async.waterfall([
+		function (next) {
+			user[method](uid, theiruid, next);
+		},
+		function (next) {
+			plugins.fireHook('action:user.' + method, {
+				fromUid: uid,
+				toUid: theiruid,
+			});
+			next();
+		},
+	], callback);
 }
 
 SocketUser.saveSettings = function (socket, data, callback) {

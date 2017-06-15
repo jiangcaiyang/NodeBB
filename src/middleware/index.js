@@ -1,7 +1,6 @@
 'use strict';
 
 var async = require('async');
-var fs = require('fs');
 var path = require('path');
 var csrf = require('csurf');
 var validator = require('validator');
@@ -13,6 +12,7 @@ var plugins = require('../plugins');
 var meta = require('../meta');
 var user = require('../user');
 var groups = require('../groups');
+var file = require('../file');
 
 var analytics = require('../analytics');
 
@@ -108,14 +108,15 @@ function expose(exposedField, method, field, req, res, next) {
 	if (!req.params.hasOwnProperty(field)) {
 		return next();
 	}
-	method(req.params[field], function (err, id) {
-		if (err) {
-			return next(err);
-		}
-
-		res.locals[exposedField] = id;
-		next();
-	});
+	async.waterfall([
+		function (next) {
+			method(req.params[field], next);
+		},
+		function (id, next) {
+			res.locals[exposedField] = id;
+			next();
+		},
+	], next);
 }
 
 middleware.privateUploads = function (req, res, next) {
@@ -143,24 +144,25 @@ middleware.applyBlacklist = function (req, res, next) {
 	});
 };
 
-middleware.processTimeagoLocales = function (req, res) {
+middleware.processTimeagoLocales = function (req, res, next) {
 	var fallback = req.path.indexOf('-short') === -1 ? 'jquery.timeago.en.js' : 'jquery.timeago.en-short.js';
 	var localPath = path.join(__dirname, '../../public/vendor/jquery/timeago/locales', req.path);
-	var exists;
 
-	try {
-		exists = fs.accessSync(localPath, fs.F_OK | fs.R_OK);
-	} catch (e) {
-		exists = false;
-	}
-
-	if (exists) {
-		res.status(200).sendFile(localPath, {
-			maxAge: req.app.enabled('cache') ? 5184000000 : 0,
-		});
-	} else {
-		res.status(200).sendFile(path.join(__dirname, '../../public/vendor/jquery/timeago/locales', fallback), {
-			maxAge: req.app.enabled('cache') ? 5184000000 : 0,
-		});
-	}
+	async.waterfall([
+		function (next) {
+			file.exists(localPath, next);
+		},
+		function (exists, next) {
+			if (exists) {
+				next(null, localPath);
+			} else {
+				next(null, path.join(__dirname, '../../public/vendor/jquery/timeago/locales', fallback));
+			}
+		},
+		function (path) {
+			res.status(200).sendFile(path, {
+				maxAge: req.app.enabled('cache') ? 5184000000 : 0,
+			});
+		},
+	], next);
 };

@@ -8,13 +8,17 @@ var meta = require('../meta');
 var plugins = require('../plugins');
 var widgets = require('../widgets');
 var user = require('../user');
+var userDigest = require('../user/digest');
+var userEmail = require('../user/email');
 var logger = require('../logger');
 var events = require('../events');
 var emailer = require('../emailer');
 var db = require('../database');
 var analytics = require('../analytics');
+var websockets = require('../socket.io/index');
 var index = require('./index');
 var getAdminSearchDict = require('../admin/search').getDictionary;
+var utils = require('../../public/src/utils');
 
 var SocketAdmin = {
 	user: require('./admin/user'),
@@ -37,13 +41,18 @@ var SocketAdmin = {
 };
 
 SocketAdmin.before = function (socket, method, data, next) {
-	user.isAdministrator(socket.uid, function (err, isAdmin) {
-		if (err || isAdmin) {
-			return next(err);
-		}
-		winston.warn('[socket.io] Call to admin method ( ' + method + ' ) blocked (accessed by uid ' + socket.uid + ')');
-		next(new Error('[[error:no-privileges]]'));
-	});
+	async.waterfall([
+		function (next) {
+			user.isAdministrator(socket.uid, next);
+		},
+		function (isAdmin) {
+			if (isAdmin) {
+				return next();
+			}
+			winston.warn('[socket.io] Call to admin method ( ' + method + ' ) blocked (accessed by uid ' + socket.uid + ')');
+			next(new Error('[[error:no-privileges]]'));
+		},
+	], next);
 };
 
 SocketAdmin.reload = function (socket, data, callback) {
@@ -57,26 +66,27 @@ SocketAdmin.reload = function (socket, data, callback) {
 };
 
 SocketAdmin.restart = function (socket, data, callback) {
-	require('../meta/build').buildAll(function (err) {
-		if (err) {
-			return callback(err);
-		}
+	async.waterfall([
+		function (next) {
+			require('../meta/build').buildAll(next);
+		},
+		function (next) {
+			events.log({
+				type: 'build',
+				uid: socket.uid,
+				ip: socket.ip,
+			});
 
-		events.log({
-			type: 'build',
-			uid: socket.uid,
-			ip: socket.ip,
-		});
+			events.log({
+				type: 'restart',
+				uid: socket.uid,
+				ip: socket.ip,
+			});
 
-		events.log({
-			type: 'restart',
-			uid: socket.uid,
-			ip: socket.ip,
-		});
-
-		meta.restart();
-		callback();
-	});
+			meta.restart();
+			next();
+		},
+	], callback);
 };
 
 SocketAdmin.fireEvent = function (socket, data, callback) {
@@ -198,11 +208,39 @@ SocketAdmin.settings.clearSitemapCache = function (socket, data, callback) {
 
 SocketAdmin.email.test = function (socket, data, callback) {
 	var site_title = meta.config.title || 'NodeBB';
-	emailer.send(data.template, socket.uid, {
+	var payload = {
 		subject: '[' + site_title + '] Test Email',
 		site_title: site_title,
 		url: nconf.get('url'),
-	}, callback);
+	};
+
+	switch (data.template) {
+	case 'digest':
+		userDigest.execute({
+			interval: 'day',
+			subscribers: [socket.uid],
+		}, callback);
+		break;
+
+	case 'banned':
+		Object.assign(payload, {
+			username: 'test-user',
+			until: utils.toISOString(Date.now()),
+			reason: 'Test Reason',
+		});
+		emailer.send(data.template, socket.uid, payload, callback);
+		break;
+
+	case 'welcome':
+		userEmail.sendValidationEmail(socket.uid, {
+			force: 1,
+		});
+		break;
+
+	default:
+		emailer.send(data.template, socket.uid, payload, callback);
+		break;
+	}
 };
 
 SocketAdmin.analytics.get = function (socket, data, callback) {
@@ -278,5 +316,9 @@ SocketAdmin.deleteAllSessions = function (socket, data, callback) {
 	user.auth.deleteAllSessions(callback);
 };
 
+SocketAdmin.reloadAllSessions = function (socket, data, callback) {
+	websockets.in('uid_' + socket.uid).emit('event:livereload');
+	callback();
+};
 
 module.exports = SocketAdmin;
