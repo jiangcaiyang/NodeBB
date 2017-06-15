@@ -64,3 +64,4 @@ coverage
 /public/qtdream-player/
 test/files/normalise.jpg.png
 test/files/normalise-resized.jpg
+package-lock.json
