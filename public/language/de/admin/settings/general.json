@@ -1,6 +1,9 @@
 {
 	"site-settings": "Forum Einstellungen",
 	"title": "Forum Titel",
+	"title.url": "URL",
+	"title.url-placeholder": "Die URL des Seitentitels",
+	"title.url-help": "Wenn der Titel angeklickt wird, werden Benutzer zu dieser Adresse geschickt, bei leerem Feld wird die Startseite verwendet.",
 	"title.name": "Name Deiner Community",
 	"title.show-in-header": "Titel im Header anzeigen",
 	"browser-title": "Browser Titel",

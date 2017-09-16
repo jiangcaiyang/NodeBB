@@ -9,6 +9,12 @@
 			<label>[[admin/settings/general:title]]</label>
 			<input class="form-control" type="text" placeholder="[[admin/settings/general:title.name]]" data-field="title" />
 
+			<label for="title:url">[[admin/settings/general:title.url]]</label>
+			<input id ="title:url" type="text" class="form-control" placeholder="[[admin/settings/general:title.url-placeholder]]" data-field="title:url" />
+			<p class="help-block">
+				[[admin/settings/general:title.url-help]]
+			</p>
+
 			<div class="checkbox">
 				<label for="showSiteTitle" class="mdl-switch mdl-js-switch mdl-js-ripple-effect">
 					<input type="checkbox" class="mdl-switch__input" id="showSiteTitle" data-field="showSiteTitle" name="showSiteTitle" />
@@ -43,7 +49,7 @@
 		<div class="form-group">
 			<label for="logoUrl">[[admin/settings/general:logo.image]]</label>
 			<div class="input-group">
-				<input id="logoUrl" type="text" class="form-control" placeholder="[[admin/settings/general:logo.image-placeholder]]" data-field="brand:logo" data-action="upload" data-target="logoUrl" data-route="{config.relative_path}/api/admin/uploadlogo" readonly />
+				<input id="logoUrl" type="text" class="form-control" placeholder="[[admin/settings/general:logo.image-placeholder]]" data-field="brand:logo" />
 				<span class="input-group-btn">
 					<input data-action="upload" data-target="logoUrl" data-route="{config.relative_path}/api/admin/uploadlogo" type="button" class="btn btn-default" value="[[admin/settings/general:logo.upload]]"></input>
 					<button data-action="removeLogo" type="button" class="btn btn-default btn-danger"><i class="fa fa-times"></i></button>
@@ -66,7 +72,7 @@
 		<div class="form-group">
 			<label for="og_image">og:image</label>
 			<div class="input-group">
-				<input id="og_image" type="text" class="form-control" placeholder="" data-field="og:image" data-action="upload" data-target="og_image" data-route="{config.relative_path}/api/admin/uploadOgImage" readonly />
+				<input id="og_image" type="text" class="form-control" placeholder="" data-field="og:image" />
 				<span class="input-group-btn">
 					<input data-action="upload" data-target="og_image" data-route="{config.relative_path}/api/admin/uploadOgImage" type="button" class="btn btn-default" value="[[admin/settings/general:logo.upload]]"></input>
 					<button data-action="removeOgImage" type="button" class="btn btn-default btn-danger"><i class="fa fa-times"></i></button>

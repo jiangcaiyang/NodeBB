@@ -28,6 +28,10 @@ module.exports = function (Groups) {
 			return callback(new Error('[[error:invalid-data]]'));
 		}
 
+		if (!uid) {
+			return callback(new Error('[[error:invalid-uid]]'));
+		}
+
 		async.waterfall([
 			function (next) {
 				Groups.isMember(uid, groupName, next);
@@ -248,6 +252,9 @@ module.exports = function (Groups) {
 				}
 			},
 			function (next) {
+				clearGroupTitleIfSet(groupName, uid, next);
+			},
+			function (next) {
 				plugins.fireHook('action:group.leave', {
 					groupName: groupName,
 					uid: uid,
@@ -256,6 +263,24 @@ module.exports = function (Groups) {
 			},
 		], callback);
 	};
+
+	function clearGroupTitleIfSet(groupName, uid, callback) {
+		if (groupName === 'registered-users' || Groups.isPrivilegeGroup(groupName)) {
+			return callback();
+		}
+		async.waterfall([
+			function (next) {
+				db.getObjectField('user:' + uid, 'groupTitle', next);
+			},
+			function (groupTitle, next) {
+				if (groupTitle === groupName) {
+					db.deleteObjectField('user:' + uid, 'groupTitle', next);
+				} else {
+					next();
+				}
+			},
+		], callback);
+	}
 
 	Groups.leaveAllGroups = function (uid, callback) {
 		async.waterfall([

@@ -7,6 +7,7 @@ var winston = require('winston');
 var user = require('../user');
 var utils = require('../utils');
 var translator = require('../translator');
+var batch = require('../batch');
 
 var db = require('../database');
 var meta = require('../meta');
@@ -85,7 +86,6 @@ UserReset.send = function (email, callback) {
 		function (subject, code, next) {
 			var reset_link = nconf.get('url') + '/reset/' + code;
 			emailer.send('reset', uid, {
-				site_title: (meta.config.title || 'NodeBB'),
 				reset_link: reset_link,
 				subject: subject,
 				template: 'reset',
@@ -120,12 +120,14 @@ UserReset.commit = function (code, password, callback) {
 		},
 		function (hash, next) {
 			async.parallel([
-				async.apply(user.setUserField, uid, 'password', hash),
+				async.apply(user.setUserFields, uid, { password: hash, 'email:confirmed': 1 }),
 				async.apply(db.deleteObjectField, 'reset:uid', code),
 				async.apply(db.sortedSetRemove, 'reset:issueDate', code),
 				async.apply(db.sortedSetRemove, 'reset:issueDate:uid', uid),
 				async.apply(user.reset.updateExpiry, uid),
 				async.apply(user.auth.resetLockout, uid),
+				async.apply(db.delete, 'uid:' + uid + ':confirm:email:sent'),
+				async.apply(db.sortedSetRemove, 'users:notvalidated', uid),
 			], next);
 		},
 	], callback);
@@ -162,6 +164,40 @@ UserReset.clean = function (callback) {
 				async.apply(db.deleteObjectFields, 'reset:uid', results.tokens),
 				async.apply(db.sortedSetRemove, 'reset:issueDate', results.tokens),
 				async.apply(db.sortedSetRemove, 'reset:issueDate:uid', results.uids),
+			], next);
+		},
+	], callback);
+};
+
+UserReset.cleanByUid = function (uid, callback) {
+	var toClean = [];
+	uid = parseInt(uid, 10);
+
+	async.waterfall([
+		function (next) {
+			batch.processSortedSet('reset:issueDate', function (tokens, next) {
+				db.getObjectFields('reset:uid', tokens, function (err, results) {
+					for (var code in results) {
+						if (results.hasOwnProperty(code) && parseInt(results[code], 10) === uid) {
+							toClean.push(code);
+						}
+					}
+
+					next(err);
+				});
+			}, next);
+		},
+		function (next) {
+			if (!toClean.length) {
+				winston.verbose('[UserReset.cleanByUid] No tokens found for uid (' + uid + ').');
+				return setImmediate(next);
+			}
+
+			winston.verbose('[UserReset.cleanByUid] Found ' + toClean.length + ' token(s), removing...');
+			async.parallel([
+				async.apply(db.deleteObjectFields, 'reset:uid', toClean),
+				async.apply(db.sortedSetRemove, 'reset:issueDate', toClean),
+				async.apply(db.sortedSetRemove, 'reset:issueDate:uid', uid),
 			], next);
 		},
 	], callback);

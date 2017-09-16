@@ -1,7 +1,7 @@
 'use strict';
 
 
-define('admin/general/dashboard', ['semver', 'Chart', 'translator'], function (semver, Chart, translator) {
+define('admin/general/dashboard', ['semver', 'Chart', 'translator', 'benchpress'], function (semver, Chart, translator, Benchpress) {
 	var	Admin = {};
 	var	intervals = {
 		rooms: false,
@@ -208,7 +208,7 @@ define('admin/general/dashboard', ['semver', 'Chart', 'translator'], function (s
 						backgroundColor: 'rgba(151,187,205,0.2)',
 						borderColor: 'rgba(151,187,205,1)',
 						pointBackgroundColor: 'rgba(151,187,205,1)',
-						pointHoverBackgroundColor: '#fff',
+						pointHoverBackgroundColor: 'rgba(151,187,205,1)',
 						pointBorderColor: '#fff',
 						pointHoverBorderColor: 'rgba(151,187,205,1)',
 						data: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
@@ -231,6 +231,9 @@ define('admin/general/dashboard', ['semver', 'Chart', 'translator'], function (s
 								beginAtZero: true,
 							},
 						}],
+					},
+					tooltips: {
+						mode: 'x',
 					},
 				},
 			});
@@ -314,7 +317,7 @@ define('admin/general/dashboard', ['semver', 'Chart', 'translator'], function (s
 			$('[data-action="updateGraph"][data-units="custom"]').on('click', function () {
 				var targetEl = $(this);
 
-				templates.parse('admin/partials/pageviews-range-select', {}, function (html) {
+				Benchpress.parse('admin/partials/pageviews-range-select', {}, function (html) {
 					var modal = bootbox.dialog({
 						title: '[[admin/general/dashboard:page-views-custom]]',
 						message: html,

@@ -97,6 +97,14 @@ describe('Groups', function () {
 				done();
 			});
 		});
+
+		it('should return null if group does not exist', function (done) {
+			Groups.get('doesnotexist', {}, function (err, groupObj) {
+				assert.ifError(err);
+				assert.strictEqual(groupObj, null);
+				done();
+			});
+		});
 	});
 
 	describe('.search()', function () {
@@ -375,8 +383,9 @@ describe('Groups', function () {
 			Groups.destroy('foobar?', function (err) {
 				assert.ifError(err);
 
-				Groups.get('foobar?', {}, function (err) {
-					assert(err, 'Group still exists!');
+				Groups.get('foobar?', {}, function (err, groupObj) {
+					assert.ifError(err);
+					assert.strictEqual(groupObj, null);
 
 					done();
 				});
@@ -408,6 +417,32 @@ describe('Groups', function () {
 					assert.strictEqual(true, isMember);
 
 					done();
+				});
+			});
+		});
+
+		it('should fail to add user to group if group name is invalid', function (done) {
+			Groups.join(0, 1, function (err) {
+				assert.equal(err.message, '[[error:invalid-data]]');
+				Groups.join(null, 1, function (err) {
+					assert.equal(err.message, '[[error:invalid-data]]');
+					Groups.join(undefined, 1, function (err) {
+						assert.equal(err.message, '[[error:invalid-data]]');
+						done();
+					});
+				});
+			});
+		});
+
+		it('should fail to add user to group if uid is invalid', function (done) {
+			Groups.join('Test', 0, function (err) {
+				assert.equal(err.message, '[[error:invalid-uid]]');
+				Groups.join('Test', null, function (err) {
+					assert.equal(err.message, '[[error:invalid-uid]]');
+					Groups.join('Test', undefined, function (err) {
+						assert.equal(err.message, '[[error:invalid-uid]]');
+						done();
+					});
 				});
 			});
 		});

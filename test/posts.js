@@ -3,6 +3,8 @@
 
 var	assert = require('assert');
 var async = require('async');
+var request = require('request');
+var nconf = require('nconf');
 
 var db = require('./mocks/databasemock');
 var topics = require('../src/topics');
@@ -12,6 +14,9 @@ var privileges = require('../src/privileges');
 var user = require('../src/user');
 var groups = require('../src/groups');
 var socketPosts = require('../src/socket.io/posts');
+var socketTopics = require('../src/socket.io/topics');
+var meta = require('../src/meta');
+var helpers = require('./helpers');
 
 describe('Post\'s', function () {
 	var voterUid;
@@ -31,7 +36,7 @@ describe('Post\'s', function () {
 				user.create({ username: 'upvotee' }, next);
 			},
 			globalModUid: function (next) {
-				user.create({ username: 'globalmod' }, next);
+				user.create({ username: 'globalmod', password: 'globalmodpwd' }, next);
 			},
 			category: function (next) {
 				categories.create({
@@ -296,7 +301,6 @@ describe('Post\'s', function () {
 		var pid;
 		var replyPid;
 		var tid;
-		var meta = require('../src/meta');
 		before(function (done) {
 			topics.post({
 				uid: voterUid,
@@ -553,7 +557,6 @@ describe('Post\'s', function () {
 		});
 
 		it('should parse signature and remove links and images', function (done) {
-			var meta = require('../src/meta');
 			meta.config['signatures:disableLinks'] = 1;
 			meta.config['signatures:disableImages'] = 1;
 			var userData = {
@@ -745,6 +748,78 @@ describe('Post\'s', function () {
 			posts.filterPidsByCid([postData.pid, 100, 101], [cid, 2, 3], function (err, pids) {
 				assert.ifError(err);
 				assert.deepEqual([postData.pid], pids);
+				done();
+			});
+		});
+	});
+
+	describe('post queue', function () {
+		var uid;
+		before(function (done) {
+			meta.config.postQueue = 1;
+			user.create({ username: 'newuser' }, function (err, _uid) {
+				assert.ifError(err);
+				uid = _uid;
+				done();
+			});
+		});
+
+		after(function (done) {
+			meta.config.postQueue = 0;
+			done();
+		});
+
+		it('should add topic to post queue', function (done) {
+			socketTopics.post({ uid: uid }, { title: 'should be queued', content: 'queued topic content', cid: cid }, function (err, result) {
+				assert.ifError(err);
+				assert.strictEqual(result.queued, true);
+				assert.equal(result.message, '[[success:post-queued]]');
+				done();
+			});
+		});
+
+		it('should add reply to post queue', function (done) {
+			socketPosts.reply({ uid: uid }, { content: 'this is a queued reply', tid: topicData.tid }, function (err, result) {
+				assert.ifError(err);
+				assert.strictEqual(result.queued, true);
+				assert.equal(result.message, '[[success:post-queued]]');
+				done();
+			});
+		});
+
+		it('should load queued posts', function (done) {
+			helpers.loginUser('globalmod', 'globalmodpwd', function (err, jar) {
+				assert.ifError(err);
+				request(nconf.get('url') + '/api/post-queue', { jar: jar, json: true }, function (err, res, body) {
+					assert.ifError(err);
+					assert.equal(body.posts[0].type, 'topic');
+					assert.equal(body.posts[0].data.content, 'queued topic content');
+					assert.equal(body.posts[1].type, 'reply');
+					assert.equal(body.posts[1].data.content, 'this is a queued reply');
+					done();
+				});
+			});
+		});
+
+		it('should accept queued posts submit', function (done) {
+			var ids;
+			async.waterfall([
+				function (next) {
+					db.getSortedSetRange('post:queue', 0, -1, next);
+				},
+				function (_ids, next) {
+					ids = _ids;
+					socketPosts.accept({ uid: globalModUid }, { id: ids[0] }, next);
+				},
+				function (next) {
+					socketPosts.accept({ uid: globalModUid }, { id: ids[1] }, next);
+				},
+			], done);
+		});
+
+		it('should prevent regular users from approving posts', function (done) {
+			socketPosts.accept({ uid: uid }, { id: 1 }, function (err) {
+				assert.equal(err.message, '[[error:no-privileges]]');
 				done();
 			});
 		});

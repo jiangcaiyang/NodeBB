@@ -12,11 +12,11 @@
 	"reorder-plugins": "Plugins neu sortieren",
 	"order-active": "Aktive Plugins sortieren",
 	"dev-interested": "Daran interessiert selbst Plugins für NodeBB zu schreiben?",
-	"docs-info": "Die komplette Dokumentation zur erstellung von Plugins kann im <a target=\"_blank\" href=\"https://docs.nodebb.org/en/latest/plugins/create.html\">NodeBB Dokumentations Portal</a> gefunden werden.",
+	"docs-info": "Die komplette Dokumentation zum erstellen von Plugins kann im <a target=\"_blank\" href=\"https://docs.nodebb.org/development/plugins/\">NodeBB Docs Portal</a> gefunden werden.",
 
 	"order.description": "Bestimmte Plugins funktionieren optimal, wenn diese vor/nach anderen Plugins initialisiert werden.",
 	"order.explanation": "Die Plugins werden in der hier spezifizierten Reihenfolge geladen, von oben nach unten",
-	
+
 	"plugin-item.themes": "Themes",
 	"plugin-item.deactivate": "Deaktivieren",
 	"plugin-item.activate": "Aktivieren",
@@ -43,5 +43,9 @@
 	"alert.suggest-error": "<p>NodeBB konnte den Paket-Manager nicht erreichen. Willst Du mit der Installation der neuesten Version fortfahren</p><div class=\"alert alert-danger\"><strong>Der Server meldete (%1)</strong>: %2</div>",
 	"alert.package-manager-unreachable": "<p>NodeBB konnte den Paket-Manager nicht erreichen, eine Aktualisierung wird momentan nicht empfohlen.</p>",
 	"alert.incompatible": "<p>NodeBB Version (v%1) ist nur für Aktualisierungen bis v%2 dieses Plugins bestimmt. Bitte aktualisiere NodeBB, wenn eine neuere Version dieses Plugins installiert werden soll.</p>",
-	"alert.possibly-incompatible": "<div class=\"alert alert-warning\"><p><strong>Keine Kompatibilitätsinformationen gefunden</strong></p><p>Dieses Plugin legte keine spezifische NodeBB version fest, welche für die Installation benötigt wird. Volle Kompatibilität kann nicht gewährleistet werden, was dazu führen könnte, dass ihr NodeBB nicht mehr korrekt startet.</p></div><p>Für den Fall, dass NodeBB nicht mehr ordnungsgemäß startet:</p><pre><code>$ ./nodebb reset plugin=\"%1\"</code></pre><p>Soll mit der installation der neuesten Version dieses Plugins fortgefahren werden?</p>"
+	"alert.possibly-incompatible": "<div class=\"alert alert-warning\"><p><strong>Keine Kompatibilitätsinformationen gefunden</strong></p><p>Dieses Plugin legte keine spezifische NodeBB version fest, welche für die Installation benötigt wird. Volle Kompatibilität kann nicht gewährleistet werden, was dazu führen könnte, dass ihr NodeBB nicht mehr korrekt startet.</p></div><p>Für den Fall, dass NodeBB nicht mehr ordnungsgemäß startet:</p><pre><code>$ ./nodebb reset plugin=\"%1\"</code></pre><p>Soll mit der installation der neuesten Version dieses Plugins fortgefahren werden?</p>",
+
+	"license.title": "Plugin-Lizenzinformation",
+	"license.intro": "Das Plugin <strong>%1</strong>is unter der %2 Lizenz lizenziert. Bitte ließ dir diese durch bevor du dieses Plugin aktivierst.",
+	"license.cta": "Willst du dieses Plugin wirklich aktivieren?"
 }

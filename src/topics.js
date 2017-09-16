@@ -7,6 +7,7 @@ var db = require('./database');
 var posts = require('./posts');
 var utils = require('./utils');
 var plugins = require('./plugins');
+var meta = require('./meta');
 var user = require('./user');
 var categories = require('./categories');
 var privileges = require('./privileges');
@@ -135,6 +136,12 @@ Topics.getTopicsByTids = function (tids, uid, callback) {
 			}, next);
 		},
 		function (results, next) {
+			if (parseInt(meta.config.hideFullname, 10) === 1) {
+				results.users.forEach(function (user) {
+					user.fullname = undefined;
+				});
+			}
+
 			var users = _.zipObject(uids, results.users);
 			var categories = _.zipObject(cids, results.categories);
 
@@ -175,7 +182,8 @@ Topics.getTopicWithPosts = function (topicData, set, uid, start, stop, reverse, 
 		function (next) {
 			async.parallel({
 				posts: async.apply(getMainPostAndReplies, topicData, set, uid, start, stop, reverse),
-				category: async.apply(Topics.getCategoryData, topicData.tid),
+				category: async.apply(categories.getCategoryData, topicData.cid),
+				tagWhitelist: async.apply(categories.getTagWhitelist, [topicData.cid]),
 				threadTools: async.apply(plugins.fireHook, 'filter:topic.thread_tools', { topic: topicData, uid: uid, tools: [] }),
 				isFollowing: async.apply(Topics.isFollowing, [topicData.tid], uid),
 				isIgnoring: async.apply(Topics.isIgnoring, [topicData.tid], uid),
@@ -198,6 +206,7 @@ Topics.getTopicWithPosts = function (topicData, set, uid, start, stop, reverse, 
 		function (results, next) {
 			topicData.posts = results.posts;
 			topicData.category = results.category;
+			topicData.tagWhitelist = results.tagWhitelist[0];
 			topicData.thread_tools = results.threadTools.tools;
 			topicData.isFollowing = results.isFollowing[0];
 			topicData.isNotFollowing = !results.isFollowing[0] && !results.isIgnoring[0];
@@ -326,12 +335,10 @@ Topics.isLocked = function (tid, callback) {
 };
 
 Topics.search = function (tid, term, callback) {
-	if (plugins.hasListeners('filter:topic.search')) {
-		plugins.fireHook('filter:topic.search', {
-			tid: tid,
-			term: term,
-		}, callback);
-	} else {
-		callback(new Error('[[error:no-plugins-available]]'), []);
-	}
+	plugins.fireHook('filter:topic.search', {
+		tid: tid,
+		term: term,
+	}, function (err, pids) {
+		callback(err, Array.isArray(pids) ? pids : []);
+	});
 };

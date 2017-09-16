@@ -4,11 +4,12 @@ var nconf = require('nconf');
 var winston = require('winston');
 var path = require('path');
 var async = require('async');
+var express = require('express');
+
 var meta = require('../meta');
 var controllers = require('../controllers');
 var plugins = require('../plugins');
 var user = require('../user');
-var express = require('express');
 
 var accountRoutes = require('./accounts');
 var metaRoutes = require('./meta');
@@ -32,8 +33,10 @@ function mainRoutes(app, middleware, controllers) {
 	setupPageRoute(app, '/confirm/:code', middleware, [], controllers.confirmEmail);
 	setupPageRoute(app, '/outgoing', middleware, [], controllers.outgoing);
 	setupPageRoute(app, '/search', middleware, [], controllers.search.search);
-	setupPageRoute(app, '/reset/:code?', middleware, [], controllers.reset);
+	setupPageRoute(app, '/reset/:code?', middleware, [middleware.delayLoading], controllers.reset);
 	setupPageRoute(app, '/tos', middleware, [], controllers.termsOfUse);
+
+	app.post('/compose', middleware.applyCSRF, controllers.composePost);
 }
 
 function modRoutes(app, middleware, controllers) {
@@ -42,6 +45,7 @@ function modRoutes(app, middleware, controllers) {
 }
 
 function globalModRoutes(app, middleware, controllers) {
+	setupPageRoute(app, '/post-queue', middleware, [], controllers.globalMods.postQueue);
 	setupPageRoute(app, '/ip-blacklist', middleware, [], controllers.globalMods.ipBlacklist);
 }
 
@@ -113,9 +117,11 @@ module.exports = function (app, middleware, hotswapIds, callback) {
 	pluginRouter.hotswapId = 'plugins';
 	authRouter.hotswapId = 'auth';
 
-	app.all(relativePath + '(/api|/api/*?)', middleware.prepareAPI);
-	app.all(relativePath + '(/api/admin|/api/admin/*?)', middleware.isAdmin);
-	app.all(relativePath + '(/admin|/admin/*?)', ensureLoggedIn.ensureLoggedIn(nconf.get('relative_path') + '/login?local=1'), middleware.applyCSRF, middleware.isAdmin);
+	app.all(relativePath + '(/+api|/+api/*?)', middleware.prepareAPI);
+	app.all(relativePath + '(/+api/admin|/+api/admin/*?)', middleware.isAdmin);
+	app.all(relativePath + '(/+admin|/+admin/*?)', ensureLoggedIn.ensureLoggedIn(nconf.get('relative_path') + '/login?local=1'), middleware.applyCSRF, middleware.isAdmin);
+
+	app.use(middleware.stripLeadingSlashes);
 
 	adminRoutes(router, middleware, controllers);
 	metaRoutes(router, middleware, controllers);
@@ -134,7 +140,7 @@ module.exports = function (app, middleware, hotswapIds, callback) {
 	groupRoutes(router, middleware, controllers);
 
 	for (x = 0; x < routers.length; x += 1) {
-		app.use(relativePath, routers[x]);
+		app.use(relativePath || '/', routers[x]);
 	}
 
 	if (process.env.NODE_ENV === 'development') {
@@ -142,6 +148,7 @@ module.exports = function (app, middleware, hotswapIds, callback) {
 	}
 
 	app.use(middleware.privateUploads);
+	app.use(relativePath + '/assets/templates', middleware.templatesOnDemand);
 
 	var statics = [
 		{ route: '/assets', path: path.join(__dirname, '../../build/public') },

@@ -1,6 +1,9 @@
 {
 	"site-settings": "サイト設定",
 	"title": "サイトタイトル",
+	"title.url": "URL",
+	"title.url-placeholder": "サイトタイトルのURL",
+	"title.url-help": "タイトルをクリックすると、ユーザーをこのアドレスに送信します。空白のままにすると、ユーザーはフォーラムのインデックスに送信されます。",
 	"title.name": "あなたのコミュニティ名",
 	"title.show-in-header": "ヘッダーにサイトタイトルを表示する",
 	"browser-title": "ブラウザ",

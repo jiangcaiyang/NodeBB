@@ -446,15 +446,16 @@ describe('User', function () {
 			});
 		});
 
-		it('.commit() should update the user\'s password', function (done) {
+		it('.commit() should update the user\'s password and confirm their email', function (done) {
 			User.reset.commit(code, 'newpassword', function (err) {
 				assert.ifError(err);
 
-				db.getObjectField('user:' + uid, 'password', function (err, newPassword) {
+				db.getObject('user:' + uid, function (err, userData) {
 					assert.ifError(err);
-					Password.compare('newpassword', newPassword, function (err, match) {
+					Password.compare('newpassword', userData.password, function (err, match) {
 						assert.ifError(err);
 						assert(match);
+						assert.equal(parseInt(userData['email:confirmed'], 10), 1);
 						done();
 					});
 				});
@@ -1235,15 +1236,16 @@ describe('User', function () {
 					setTimeout(next, 50);
 				},
 				function (next) {
-					socketUser.setModerationNote({ uid: adminUid }, { uid: testUid, note: 'second moderation note' }, next);
+					socketUser.setModerationNote({ uid: adminUid }, { uid: testUid, note: '<svg/onload=alert(document.location);//' }, next);
 				},
 				function (next) {
 					User.getModerationNotes(testUid, 0, -1, next);
 				},
 			], function (err, notes) {
 				assert.ifError(err);
-				assert.equal(notes[0].note, 'second moderation note');
+				assert.equal(notes[0].note, '&lt;svg&#x2F;onload=alert(document.location);&#x2F;&#x2F;');
 				assert.equal(notes[0].uid, adminUid);
+				assert.equal(notes[1].note, 'this is a test user');
 				assert(notes[0].timestamp);
 				done();
 			});
@@ -1274,6 +1276,7 @@ describe('User', function () {
 			helpers.registerUser({
 				username: 'rejectme',
 				password: '123456',
+				'password-confirm': '123456',
 				email: 'reject@me.com',
 			}, function (err) {
 				assert.ifError(err);
@@ -1304,6 +1307,7 @@ describe('User', function () {
 			helpers.registerUser({
 				username: 'acceptme',
 				password: '123456',
+				'password-confirm': '123456',
 				email: 'accept@me.com',
 			}, function (err) {
 				assert.ifError(err);
@@ -1528,6 +1532,56 @@ describe('User', function () {
 				User.digest.execute({ interval: 'day' }, function (err) {
 					assert.ifError(err);
 					done();
+				});
+			});
+		});
+	});
+
+	describe('hideEmail/hideFullname', function () {
+		var uid;
+		after(function (done) {
+			meta.config.hideEmail = 0;
+			meta.config.hideFullname = 0;
+			done();
+		});
+
+		it('should hide email and fullname', function (done) {
+			meta.config.hideEmail = 1;
+			meta.config.hideFullname = 1;
+
+			User.create({
+				username: 'hiddenemail',
+				email: 'should@be.hidden',
+				fullname: 'baris soner usakli',
+			}, function (err, _uid) {
+				uid = _uid;
+				assert.ifError(err);
+				request(nconf.get('url') + '/api/user/hiddenemail', { json: true }, function (err, res, body) {
+					assert.ifError(err);
+					assert.equal(body.fullname, '');
+					assert.equal(body.email, '');
+
+					done();
+				});
+			});
+		});
+
+		it('should hide fullname in topic list and topic', function (done) {
+			Topics.post({
+				uid: uid,
+				title: 'Topic hidden',
+				content: 'lorem ipsum',
+				cid: testCid,
+			}, function (err) {
+				assert.ifError(err);
+				request(nconf.get('url') + '/api/recent', { json: true }, function (err, res, body) {
+					assert.ifError(err);
+					assert(!body.topics[0].user.hasOwnProperty('fullname'));
+					request(nconf.get('url') + '/api/topic/' + body.topics[0].slug, { json: true }, function (err, res, body) {
+						assert.ifError(err);
+						assert(!body.posts[0].user.hasOwnProperty('fullname'));
+						done();
+					});
 				});
 			});
 		});

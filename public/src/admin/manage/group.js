@@ -6,7 +6,8 @@ define('admin/manage/group', [
 	'iconSelect',
 	'admin/modules/colorpicker',
 	'translator',
-], function (memberList, iconSelect, colorpicker, translator) {
+	'benchpress',
+], function (memberList, iconSelect, colorpicker, translator, Benchpress) {
 	var Groups = {};
 
 	Groups.init = function () {
@@ -20,6 +21,10 @@ define('admin/manage/group', [
 
 
 		var groupName = ajaxify.data.group.name;
+
+		$('#group-selector').on('change', function () {
+			ajaxify.go('admin/manage/groups/' + $(this).val() + window.location.hash);
+		});
 
 		memberList.init('admin/manage/group');
 
@@ -99,7 +104,7 @@ define('admin/manage/group', [
 					'icon:text': userLabel.attr('data-usericon-text'),
 				};
 
-				templates.parse('admin/partials/groups/memberlist', 'members', {
+				Benchpress.parse('admin/partials/groups/memberlist', 'group.members', {
 					group: {
 						isOwner: ajaxify.data.group.isOwner,
 						members: [member],

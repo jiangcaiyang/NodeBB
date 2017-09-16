@@ -1,11 +1,13 @@
 'use strict';
 
-var ip = require('ip');
+var ipaddr = require('ipaddr.js');
 var winston = require('winston');
 var async = require('async');
 
 var db = require('../database');
 var pubsub = require('../pubsub');
+var plugins = require('../plugins');
+var analytics = require('../analytics');
 
 var Blacklist = {
 	_rules: [],
@@ -27,6 +29,7 @@ Blacklist.load = function (callback) {
 				ipv4: rules.ipv4,
 				ipv6: rules.ipv6,
 				cidr: rules.cidr,
+				cidr6: rules.cidr6,
 			};
 			next();
 		},
@@ -38,7 +41,7 @@ pubsub.on('blacklist:reload', Blacklist.load);
 Blacklist.save = function (rules, callback) {
 	async.waterfall([
 		function (next) {
-			db.set('ip-blacklist-rules', rules, next);
+			db.setObject('ip-blacklist-rules', { rules: rules }, next);
 		},
 		function (next) {
 			Blacklist.load(next);
@@ -48,25 +51,48 @@ Blacklist.save = function (rules, callback) {
 };
 
 Blacklist.get = function (callback) {
-	db.get('ip-blacklist-rules', callback);
+	async.waterfall([
+		function (next) {
+			db.getObject('ip-blacklist-rules', next);
+		},
+		function (data, next) {
+			next(null, data && data.rules);
+		},
+	], callback);
 };
 
 Blacklist.test = function (clientIp, callback) {
+	// Some handy test addresses
+	// clientIp = '2001:db8:85a3:0:0:8a2e:370:7334';	// IPv6
+	// clientIp = '127.0.15.1';	// IPv4
+	var addr = ipaddr.parse(clientIp);
+
 	if (
-		Blacklist._rules.ipv4.indexOf(clientIp) === -1	&&// not explicitly specified in ipv4 list
-		Blacklist._rules.ipv6.indexOf(clientIp) === -1	&&// not explicitly specified in ipv6 list
+		Blacklist._rules.ipv4.indexOf(clientIp) === -1 &&	// not explicitly specified in ipv4 list
+		Blacklist._rules.ipv6.indexOf(clientIp) === -1 &&	// not explicitly specified in ipv6 list
 		!Blacklist._rules.cidr.some(function (subnet) {
-			return ip.cidrSubnet(subnet).contains(clientIp);
-		})	// not in a blacklisted cidr range
+			return addr.match(ipaddr.parseCIDR(subnet));
+			// return ip.cidrSubnet(subnet).contains(clientIp);
+		})	// not in a blacklisted IPv4 or IPv6 cidr range
 	) {
-		if (typeof callback === 'function') {
-			setImmediate(callback);
-		} else {
-			return false;
-		}
+		plugins.fireHook('filter:blacklist.test', {	// To return test failure, pass back an error in callback
+			ip: clientIp,
+		}, function (err) {
+			if (err) {
+				analytics.increment('blacklist');
+			}
+
+			if (typeof callback === 'function') {
+				callback(err);
+			} else {
+				return !!err;
+			}
+		});
 	} else {
 		var err = new Error('[[error:blacklisted-ip]]');
 		err.code = 'blacklisted-ip';
+
+		analytics.increment('blacklist');
 
 		if (typeof callback === 'function') {
 			setImmediate(callback, err);
@@ -83,7 +109,6 @@ Blacklist.validate = function (rules, callback) {
 	var cidr = [];
 	var invalid = [];
 
-	var isCidrSubnet = /^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))$/;
 	var inlineCommentMatch = /#.*$/;
 	var whitelist = ['127.0.0.1', '::1', '::ffff:0:127.0.0.1'];
 
@@ -96,25 +121,39 @@ Blacklist.validate = function (rules, callback) {
 
 	// Filter out invalid rules
 	rules = rules.filter(function (rule) {
-		if (whitelist.indexOf(rule) !== -1) {
+		var addr;
+		var isRange = false;
+		try {
+			addr = ipaddr.parse(rule);
+		} catch (e) {
+			// Do nothing
+		}
+
+		try {
+			addr = ipaddr.parseCIDR(rule);
+			isRange = true;
+		} catch (e) {
+			// Do nothing
+		}
+
+		if (!addr || whitelist.indexOf(rule) !== -1) {
 			invalid.push(rule);
 			return false;
 		}
 
-		if (ip.isV4Format(rule)) {
-			ipv4.push(rule);
-			return true;
-		}
-		if (ip.isV6Format(rule)) {
-			ipv6.push(rule);
-			return true;
-		}
-		if (isCidrSubnet.test(rule)) {
+		if (!isRange) {
+			if (addr.kind() === 'ipv4' && ipaddr.IPv4.isValid(rule)) {
+				ipv4.push(rule);
+				return true;
+			}
+			if (addr.kind() === 'ipv6' && ipaddr.IPv6.isValid(rule)) {
+				ipv6.push(rule);
+				return true;
+			}
+		} else {
 			cidr.push(rule);
 			return true;
 		}
-
-		invalid.push(rule);
 		return false;
 	});
 

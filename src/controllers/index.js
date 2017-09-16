@@ -7,6 +7,7 @@ var validator = require('validator');
 var meta = require('../meta');
 var user = require('../user');
 var plugins = require('../plugins');
+var topics = require('../topics');
 var helpers = require('./helpers');
 
 var Controllers = module.exports;
@@ -158,7 +159,7 @@ Controllers.login = function (req, res, next) {
 				return next(err);
 			}
 			data.username = allowLoginWith === 'email' ? user.email : user.username;
-			data.alternate_logins = [];
+			data.alternate_logins = false;
 			res.render('login', data);
 		});
 	} else {
@@ -279,6 +280,47 @@ Controllers.compose = function (req, res, next) {
 	});
 };
 
+Controllers.composePost = function (req, res) {
+	var body = req.body;
+	var data = {
+		uid: req.uid,
+		req: req,
+		timestamp: Date.now(),
+		content: body.content,
+	};
+	req.body.noscript = 'true';
+
+	if (!data.content) {
+		return helpers.noScriptErrors(req, res, '[[error:invalid-data]]', 400);
+	}
+
+	if (body.tid) {
+		data.tid = body.tid;
+
+		topics.reply(data, function (err, result) {
+			if (err) {
+				return helpers.noScriptErrors(req, res, err.message, 400);
+			}
+			user.updateOnlineUsers(result.uid);
+
+			res.redirect(nconf.get('relative_path') + '/post/' + result.pid);
+		});
+	} else if (body.cid) {
+		data.cid = body.cid;
+		data.title = body.title;
+		data.tags = [];
+		data.thumb = '';
+
+		topics.post(data, function (err, result) {
+			if (err) {
+				return helpers.noScriptErrors(req, res, err.message, 400);
+			}
+
+			res.redirect(nconf.get('relative_path') + '/topic/' + result.topicData.slug);
+		});
+	}
+};
+
 Controllers.confirmEmail = function (req, res) {
 	user.email.confirm(req.params.code, function (err) {
 		res.render('confirm', {
@@ -291,8 +333,8 @@ Controllers.confirmEmail = function (req, res) {
 Controllers.robots = function (req, res) {
 	res.set('Content-Type', 'text/plain');
 
-	if (meta.config['robots.txt']) {
-		res.send(meta.config['robots.txt']);
+	if (meta.config['robots:txt']) {
+		res.send(meta.config['robots:txt']);
 	} else {
 		res.send('User-agent: *\n' +
 			'Disallow: ' + nconf.get('relative_path') + '/admin/\n' +

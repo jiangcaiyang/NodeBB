@@ -44,9 +44,20 @@ function loadPluginInfo(pluginPath, callback) {
 		}
 		var pluginData;
 		var packageData;
+		var licenseData;
 		try {
 			pluginData = JSON.parse(results.plugin);
 			packageData = JSON.parse(results.package);
+			try {
+				licenseData = require('spdx-license-list/licenses/' + packageData.license);
+				pluginData.license = {
+					name: licenseData.name,
+					text: licenseData.licenseText,
+				};
+			} catch (e) {
+				// No license matched
+				pluginData.license = null;
+			}
 
 			pluginData.id = packageData.name;
 			pluginData.name = packageData.name;
@@ -185,7 +196,7 @@ function getScripts(pluginData, target, callback) {
 	}
 
 	var scripts = [];
-	async.each(input, function (filePath, next) {
+	async.eachSeries(input, function (filePath, next) {
 		resolveModulePath(pluginData.path, filePath, function (err, modulePath) {
 			if (err) {
 				return next(err);

@@ -299,13 +299,13 @@ describe('Messaging Library', function () {
 		});
 
 		it('should fail to get messages from room with invalid data', function (done) {
-			socketModules.chats.getMessages({ uid: null }, null, function (err, messages) {
+			socketModules.chats.getMessages({ uid: null }, null, function (err) {
 				assert.equal(err.message, '[[error:invalid-data]]');
-				socketModules.chats.getMessages({ uid: fooUid }, null, function (err, messages) {
+				socketModules.chats.getMessages({ uid: fooUid }, null, function (err) {
 					assert.equal(err.message, '[[error:invalid-data]]');
-					socketModules.chats.getMessages({ uid: fooUid }, { uid: null }, function (err, messages) {
+					socketModules.chats.getMessages({ uid: fooUid }, { uid: null }, function (err) {
 						assert.equal(err.message, '[[error:invalid-data]]');
-						socketModules.chats.getMessages({ uid: fooUid }, { uid: 1, roomId: null }, function (err, messages) {
+						socketModules.chats.getMessages({ uid: fooUid }, { uid: 1, roomId: null }, function (err) {
 							assert.equal(err.message, '[[error:invalid-data]]');
 							done();
 						});
@@ -437,6 +437,17 @@ describe('Messaging Library', function () {
 			});
 		});
 
+		it('should escape teaser', function (done) {
+			socketModules.chats.send({ uid: fooUid }, { roomId: roomId, message: '<svg/onload=alert(document.location);' }, function (err) {
+				assert.ifError(err);
+				socketModules.chats.getRecentChats({ uid: fooUid }, { after: 0, uid: fooUid }, function (err, data) {
+					assert.ifError(err);
+					assert.equal(data.rooms[0].teaser.content, '&lt;svg&#x2F;onload=alert(document.location);');
+					done();
+				});
+			});
+		});
+
 		it('should fail to check if user has private chat with invalid data', function (done) {
 			socketModules.chats.hasPrivateChat({ uid: null }, null, function (err) {
 				assert.equal(err.message, '[[error:invalid-data]]');
@@ -525,7 +536,11 @@ describe('Messaging Library', function () {
 				db.exists('message:' + mid, function (err, exists) {
 					assert.ifError(err);
 					assert(!exists);
-					done();
+					db.isSortedSetMember('uid:' + fooUid + ':chat:room:' + roomId + ':mids', mid, function (err, isMember) {
+						assert.ifError(err);
+						assert(!isMember);
+						done();
+					});
 				});
 			});
 		});
@@ -603,7 +618,7 @@ describe('Messaging Library', function () {
 		it('should return 404 if user is not in room', function (done) {
 			helpers.loginUser('baz', 'quuxquux', function (err, jar) {
 				assert.ifError(err);
-				request(nconf.get('url') + '/api/user/baz/chats/' + roomId, { json: true, jar: jar }, function (err, response, body) {
+				request(nconf.get('url') + '/api/user/baz/chats/' + roomId, { json: true, jar: jar }, function (err, response) {
 					assert.ifError(err);
 					assert.equal(response.statusCode, 404);
 					done();

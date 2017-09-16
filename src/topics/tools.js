@@ -51,6 +51,9 @@ module.exports = function (Topics) {
 				Topics[isDelete ? 'delete' : 'restore'](tid, uid, next);
 			},
 			function (next) {
+				categories.updateRecentTidForCid(topicData.cid, next);
+			},
+			function (next) {
 				topicData.deleted = isDelete ? 1 : 0;
 
 				if (isDelete) {
@@ -154,16 +157,13 @@ module.exports = function (Topics) {
 		var topicData;
 		async.waterfall([
 			function (next) {
-				Topics.exists(tid, next);
-			},
-			function (exists, next) {
-				if (!exists) {
-					return callback(new Error('[[error:no-topic]]'));
-				}
-				Topics.getTopicFields(tid, ['uid', 'tid', 'cid', 'lastposttime', 'postcount'], next);
+				Topics.getTopicData(tid, next);
 			},
 			function (_topicData, next) {
 				topicData = _topicData;
+				if (!topicData) {
+					return callback(new Error('[[error:no-topic]]'));
+				}
 				privileges.categories.isAdminOrMod(_topicData.cid, uid, next);
 			},
 			function (isAdminOrMod, next) {
@@ -261,7 +261,8 @@ module.exports = function (Topics) {
 				db.sortedSetsRemove([
 					'cid:' + topicData.cid + ':tids',
 					'cid:' + topicData.cid + ':tids:pinned',
-					'cid:' + topicData.cid + ':tids:posts',	// post count
+					'cid:' + topicData.cid + ':tids:posts',
+					'cid:' + topicData.cid + ':recent_tids',
 				], tid, next);
 			},
 			function (next) {
@@ -283,14 +284,21 @@ module.exports = function (Topics) {
 			},
 			function (next) {
 				oldCid = topic.cid;
-				categories.moveRecentReplies(tid, oldCid, cid);
-
+				categories.moveRecentReplies(tid, oldCid, cid, next);
+			},
+			function (next) {
 				async.parallel([
 					function (next) {
 						categories.incrementCategoryFieldBy(oldCid, 'topic_count', -1, next);
 					},
 					function (next) {
 						categories.incrementCategoryFieldBy(cid, 'topic_count', 1, next);
+					},
+					function (next) {
+						categories.updateRecentTid(cid, tid, next);
+					},
+					function (next) {
+						categories.updateRecentTidForCid(oldCid, next);
 					},
 					function (next) {
 						Topics.setTopicFields(tid, {

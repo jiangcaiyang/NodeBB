@@ -1,17 +1,17 @@
 {
 	"rewards": "Ödüller",
-	"condition-if-users": "If User's",
+	"condition-if-users": "Eğer kullanıcının",
 	"condition-is": "İse:",
 	"condition-then": "Sonra:",
-	"max-claims": "Amount of times reward is claimable",
-	"zero-infinite": "Enter 0 for infinite",
+	"max-claims": "Ödül talebinde bulunulabilecek miktar",
+	"zero-infinite": "Sınırsız için 0 girin",
 	"delete": "Sil",
 	"enable": "Etkinleştir",
-	"disable": "Devredışı",
+	"disable": "Devre dışı",
 	"control-panel": "Ödül Kontrol",
 	"new-reward": "Yeni Ödül",
 
 	"alert.delete-success": "Ödül başarıyla silindi",
-	"alert.no-inputs-found": "Illegal reward - no inputs found!",
+	"alert.no-inputs-found": "Yasadışı ödül - giriş bulunamadı!",
 	"alert.save-success": "Ödüller başarıyla kaydedildi"
 }
