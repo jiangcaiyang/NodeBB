@@ -2,8 +2,8 @@
 
 var async = require('async');
 var _ = require('lodash');
-var S = require('string');
 var winston = require('winston');
+var validator = require('validator');
 
 var db = require('./database');
 var user = require('./user');
@@ -64,7 +64,7 @@ Flags.init = function (callback) {
 		},
 	}, function (err, data) {
 		if (err) {
-			winston.error('[flags/init] Could not retrieve filters (error: ' + err.message + ')');
+			winston.error('[flags/init] Could not retrieve filters', err);
 			data.filters = {};
 		}
 
@@ -92,6 +92,7 @@ Flags.get = function (flagId, callback) {
 			}, function (err, payload) {
 				// Final object return construction
 				next(err, Object.assign(data.base, {
+					description: validator.escape(data.base.description),
 					datetimeISO: new Date(parseInt(data.base.datetime, 10)).toISOString(),
 					target_readable: data.base.type.charAt(0).toUpperCase() + data.base.type.slice(1) + ' ' + data.base.targetId,
 					target: payload.targetObj,
@@ -200,6 +201,7 @@ Flags.list = function (filters, uid, callback) {
 					}
 
 					next(null, Object.assign(flagObj, {
+						description: validator.escape(flagObj.description),
 						target_readable: flagObj.type.charAt(0).toUpperCase() + flagObj.type.slice(1) + ' ' + flagObj.targetId,
 						datetimeISO: new Date(parseInt(flagObj.datetime, 10)).toISOString(),
 					}));
@@ -240,7 +242,7 @@ Flags.validate = function (payload, callback) {
 				}
 
 				var minimumReputation = utils.isNumber(meta.config['privileges:flag']) ? parseInt(meta.config['privileges:flag'], 10) : 1;
-					// Check if reporter meets rep threshold (or can edit the target post, in which case threshold does not apply)
+				// Check if reporter meets rep threshold (or can edit the target post, in which case threshold does not apply)
 				if (!editable.flag && parseInt(data.reporter.reputation, 10) < minimumReputation) {
 					return callback(new Error('[[error:not-enough-reputation-to-flag]]'));
 				}
@@ -256,7 +258,7 @@ Flags.validate = function (payload, callback) {
 				}
 
 				var minimumReputation = utils.isNumber(meta.config['privileges:flag']) ? parseInt(meta.config['privileges:flag'], 10) : 1;
-					// Check if reporter meets rep threshold (or can edit the target user, in which case threshold does not apply)
+				// Check if reporter meets rep threshold (or can edit the target user, in which case threshold does not apply)
 				if (!editable && parseInt(data.reporter.reputation, 10) < minimumReputation) {
 					return callback(new Error('[[error:not-enough-reputation-to-flag]]'));
 				}
@@ -657,7 +659,7 @@ Flags.notify = function (flagObj, uid, callback) {
 				return callback(err);
 			}
 
-			var title = S(results.title).decodeHTMLEntities().s;
+			var title = utils.decodeHTMLEntities(results.title);
 			var titleEscaped = title.replace(/%/g, '&#37;').replace(/,/g, '&#44;');
 
 			notifications.create({

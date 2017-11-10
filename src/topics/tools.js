@@ -243,9 +243,10 @@ module.exports = function (Topics) {
 		], callback);
 	};
 
-	topicTools.move = function (tid, cid, uid, callback) {
+	topicTools.move = function (tid, data, callback) {
 		var topic;
 		var oldCid;
+		var cid = data.cid;
 		async.waterfall([
 			function (next) {
 				Topics.exists(tid, next);
@@ -262,8 +263,12 @@ module.exports = function (Topics) {
 					'cid:' + topicData.cid + ':tids',
 					'cid:' + topicData.cid + ':tids:pinned',
 					'cid:' + topicData.cid + ':tids:posts',
+					'cid:' + topicData.cid + ':tids:lastposttime',
 					'cid:' + topicData.cid + ':recent_tids',
 				], tid, next);
+			},
+			function (next) {
+				db.sortedSetAdd('cid:' + cid + ':tids:lastposttime', topic.lastposttime, tid, next);
 			},
 			function (next) {
 				if (parseInt(topic.pinned, 10)) {
@@ -311,12 +316,11 @@ module.exports = function (Topics) {
 				});
 			},
 			function (next) {
-				plugins.fireHook('action:topic.move', {
-					tid: tid,
-					fromCid: oldCid,
-					toCid: cid,
-					uid: uid,
-				});
+				var hookData = _.clone(data);
+				hookData.fromCid = oldCid;
+				hookData.toCid = cid;
+				hookData.tid = tid;
+				plugins.fireHook('action:topic.move', hookData);
 				next();
 			},
 		], callback);

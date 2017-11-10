@@ -73,7 +73,8 @@ define('forum/account/header', [
 	}
 
 	function setupCoverPhoto() {
-		coverPhoto.init(components.get('account/cover'),
+		coverPhoto.init(
+			components.get('account/cover'),
 			function (imageData, position, callback) {
 				socket.emit('user.updateCover', {
 					uid: ajaxify.data.uid,
@@ -92,7 +93,8 @@ define('forum/account/header', [
 					paramValue: ajaxify.data.theirid,
 					accept: '.png,.jpg,.bmp',
 				}, function (imageUrlOnServer) {
-					components.get('account/cover').css('background-image', 'url(' + imageUrlOnServer + '?' + config['cache-buster'] + ')');
+					imageUrlOnServer = (!imageUrlOnServer.startsWith('http') ? config.relative_path : '') + imageUrlOnServer + '?' + Date.now();
+					components.get('account/cover').css('background-image', 'url(' + imageUrlOnServer + ')');
 				});
 			},
 			removeCover

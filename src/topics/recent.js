@@ -3,11 +3,11 @@
 'use strict';
 
 var async = require('async');
+
 var db = require('../database');
 var plugins = require('../plugins');
 var privileges = require('../privileges');
 var user = require('../user');
-var categories = require('../categories');
 var meta = require('../meta');
 
 module.exports = function (Topics) {
@@ -23,22 +23,21 @@ module.exports = function (Topics) {
 			nextStart: 0,
 			topics: [],
 		};
-
+		if (cid && !Array.isArray(cid)) {
+			cid = [cid];
+		}
 		async.waterfall([
 			function (next) {
+				var key = 'topics:recent';
 				if (cid) {
-					categories.getTopicIds({
-						cid: cid,
-						start: 0,
-						stop: 199,
-						sort: 'newest_to_oldest',
-					}, next);
-				} else {
-					db.getSortedSetRevRange('topics:recent', 0, 199, next);
+					key = cid.map(function (cid) {
+						return 'cid:' + cid + ':tids:lastposttime';
+					});
 				}
+				db.getSortedSetRevRange(key, 0, 199, next);
 			},
 			function (tids, next) {
-				filterTids(tids, uid, filter, next);
+				filterTids(tids, uid, filter, cid, next);
 			},
 			function (tids, next) {
 				recentTopics.topicCount = tids.length;
@@ -53,14 +52,15 @@ module.exports = function (Topics) {
 		], callback);
 	};
 
-
-	function filterTids(tids, uid, filter, callback) {
+	function filterTids(tids, uid, filter, cid, callback) {
 		async.waterfall([
 			function (next) {
 				if (filter === 'watched') {
 					Topics.filterWatchedTids(tids, uid, next);
 				} else if (filter === 'new') {
 					Topics.filterNewTids(tids, uid, next);
+				} else if (filter === 'unreplied') {
+					Topics.filterUnrepliedTids(tids, next);
 				} else {
 					Topics.filterNotIgnoredTids(tids, uid, next);
 				}
@@ -82,9 +82,10 @@ module.exports = function (Topics) {
 				}, next);
 			},
 			function (results, next) {
+				cid = cid && cid.map(String);
 				tids = results.topicData.filter(function (topic) {
-					if (topic) {
-						return results.ignoredCids.indexOf(topic.cid.toString()) === -1;
+					if (topic && topic.cid) {
+						return results.ignoredCids.indexOf(topic.cid.toString()) === -1 && (!cid || (cid.length && cid.indexOf(topic.cid.toString()) !== -1));
 					}
 					return false;
 				}).map(function (topic) {
@@ -124,12 +125,17 @@ module.exports = function (Topics) {
 	Topics.updateTimestamp = function (tid, timestamp, callback) {
 		async.parallel([
 			function (next) {
+				var topicData;
 				async.waterfall([
 					function (next) {
-						Topics.getTopicField(tid, 'deleted', next);
+						Topics.getTopicFields(tid, ['cid', 'deleted'], next);
 					},
-					function (deleted, next) {
-						if (parseInt(deleted, 10) === 1) {
+					function (_topicData, next) {
+						topicData = _topicData;
+						db.sortedSetAdd('cid:' + topicData.cid + ':tids:lastposttime', timestamp, tid, next);
+					},
+					function (next) {
+						if (parseInt(topicData.deleted, 10) === 1) {
 							return next();
 						}
 						Topics.updateRecent(tid, timestamp, next);

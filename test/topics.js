@@ -654,8 +654,8 @@ describe('Topic\'s', function () {
 				function (next) {
 					topicPids = replies.map(function (reply) { return reply.pid; });
 					socketTopics.bookmark({ uid: topic.userId }, { tid: newTopic.tid, index: originalBookmark }, next);
-				}],
-				done);
+				},
+			], done);
 		});
 
 		it('should fail with invalid data', function (done) {
@@ -711,7 +711,8 @@ describe('Topic\'s', function () {
 						'Fork test, no bookmark update',
 						topicPids.slice(1, 3),
 						newTopic.tid,
-						next);
+						next
+					);
 				},
 				function (forkedTopicData, next) {
 					topics.getUserBookmark(newTopic.tid, topic.userId, next);
@@ -1132,7 +1133,7 @@ describe('Topic\'s', function () {
 			});
 		});
 
-		it('should mark all read', function (done) {
+		it('should mark category topics read', function (done) {
 			socketTopics.markUnread({ uid: adminUid }, tid, function (err) {
 				assert.ifError(err);
 				socketTopics.markCategoryTopicsRead({ uid: adminUid }, topic.categoryId, function (err) {

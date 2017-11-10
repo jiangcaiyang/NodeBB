@@ -2,36 +2,15 @@
 'use strict';
 
 var async = require('async');
-var _ = require('lodash');
 
 var meta = require('../meta');
 var db = require('../database');
 var plugins = require('../plugins');
 
-var pubsub = require('../pubsub');
-var LRU = require('lru-cache');
-
-var cache = LRU({
-	max: 1000,
-	length: function () { return 1; },
-	maxAge: 1000 * 60 * 60,
-});
-
 module.exports = function (User) {
-	User.settingsCache = cache;
-
-	pubsub.on('user:settings:cache:del', function (uid) {
-		cache.del('user:' + uid + ':settings');
-	});
-
 	User.getSettings = function (uid, callback) {
 		if (!parseInt(uid, 10)) {
 			return onSettingsLoaded(0, {}, callback);
-		}
-
-		var cached = cache.get('user:' + uid + ':settings');
-		if (cached) {
-			return onSettingsLoaded(uid, _.clone(cached || {}), callback);
 		}
 
 		async.waterfall([
@@ -41,36 +20,17 @@ module.exports = function (User) {
 			function (settings, next) {
 				settings = settings || {};
 				settings.uid = uid;
-				cache.set('user:' + uid + ':settings', settings);
-				onSettingsLoaded(uid, _.clone(settings || {}), next);
+				onSettingsLoaded(uid, settings, next);
 			},
 		], callback);
 	};
 
 	User.getMultipleUserSettings = function (uids, callback) {
-		function getFromCache(next) {
-			var settings = uids.map(function (uid) {
-				return cache.get('user:' + uid + ':settings') || {};
-			});
-			async.map(settings, function (setting, next) {
-				onSettingsLoaded(setting.uid, _.clone(setting), next);
-			}, next);
-		}
-
-
 		if (!Array.isArray(uids) || !uids.length) {
 			return callback(null, []);
 		}
 
-		var nonCachedUids = uids.filter(function (uid) {
-			return !cache.has('user:' + uid + ':settings');
-		});
-
-		if (!nonCachedUids.length) {
-			return getFromCache(callback);
-		}
-
-		var keys = nonCachedUids.map(function (uid) {
+		var keys = uids.map(function (uid) {
 			return 'user:' + uid + ':settings';
 		});
 
@@ -79,13 +39,13 @@ module.exports = function (User) {
 				db.getObjects(keys, next);
 			},
 			function (settings, next) {
-				settings.forEach(function (userSettings, index) {
+				settings = settings.map(function (userSettings, index) {
 					userSettings = userSettings || {};
-					userSettings.uid = nonCachedUids[index];
-					cache.set('user:' + userSettings.uid + ':settings', userSettings);
+					userSettings.uid = uids[index];
+					return userSettings;
 				});
 
-				getFromCache(next);
+				next(null, settings);
 			},
 		], callback);
 	};
@@ -135,12 +95,14 @@ module.exports = function (User) {
 	}
 
 	User.saveSettings = function (uid, data, callback) {
-		if (!data.postsPerPage || parseInt(data.postsPerPage, 10) <= 1 || parseInt(data.postsPerPage, 10) > meta.config.postsPerPage) {
-			return callback(new Error('[[error:invalid-pagination-value, 2, ' + meta.config.postsPerPage + ']]'));
+		var maxPostsPerPage = meta.config.maxPostsPerPage || 20;
+		if (!data.postsPerPage || parseInt(data.postsPerPage, 10) <= 1 || parseInt(data.postsPerPage, 10) > maxPostsPerPage) {
+			return callback(new Error('[[error:invalid-pagination-value, 2, ' + maxPostsPerPage + ']]'));
 		}
 
-		if (!data.topicsPerPage || parseInt(data.topicsPerPage, 10) <= 1 || parseInt(data.topicsPerPage, 10) > meta.config.topicsPerPage) {
-			return callback(new Error('[[error:invalid-pagination-value, 2, ' + meta.config.topicsPerPage + ']]'));
+		var maxTopicsPerPage = meta.config.maxTopicsPerPage || 20;
+		if (!data.topicsPerPage || parseInt(data.topicsPerPage, 10) <= 1 || parseInt(data.topicsPerPage, 10) > maxTopicsPerPage) {
+			return callback(new Error('[[error:invalid-pagination-value, 2, ' + maxTopicsPerPage + ']]'));
 		}
 
 		data.userLang = data.userLang || meta.config.defaultLang;
@@ -153,8 +115,8 @@ module.exports = function (User) {
 			openOutgoingLinksInNewTab: data.openOutgoingLinksInNewTab,
 			dailyDigestFreq: data.dailyDigestFreq || 'off',
 			usePagination: data.usePagination,
-			topicsPerPage: Math.min(data.topicsPerPage, parseInt(meta.config.topicsPerPage, 10) || 20),
-			postsPerPage: Math.min(data.postsPerPage, parseInt(meta.config.postsPerPage, 10) || 20),
+			topicsPerPage: Math.min(data.topicsPerPage, parseInt(maxTopicsPerPage, 10) || 20),
+			postsPerPage: Math.min(data.postsPerPage, parseInt(maxPostsPerPage, 10) || 20),
 			userLang: data.userLang || meta.config.defaultLang,
 			followTopicsOnCreate: data.followTopicsOnCreate,
 			followTopicsOnReply: data.followTopicsOnReply,
@@ -185,8 +147,6 @@ module.exports = function (User) {
 				User.updateDigestSetting(uid, data.dailyDigestFreq, next);
 			},
 			function (next) {
-				cache.del('user:' + uid + ':settings');
-				pubsub.publish('user:settings:cache:del', uid);
 				User.getSettings(uid, next);
 			},
 		], callback);
@@ -211,7 +171,7 @@ module.exports = function (User) {
 		if (!parseInt(uid, 10)) {
 			return setImmediate(callback);
 		}
-		cache.del('user:' + uid + ':settings');
+
 		db.setObjectField('user:' + uid + ':settings', key, value, callback);
 	};
 };

@@ -28,7 +28,7 @@ module.exports = function (User) {
 				var uploadSize = parseInt(meta.config.maximumProfileImageSize, 10) || 256;
 				var size = res.headers['content-length'];
 				var type = res.headers['content-type'];
-				var extension = mime.extension(type);
+				var extension = mime.getExtension(type);
 
 				if (['png', 'jpeg', 'jpg', 'gif'].indexOf(extension) === -1) {
 					return callback(new Error('[[error:invalid-image-extension]]'));
@@ -88,7 +88,12 @@ module.exports = function (User) {
 			function (path, next) {
 				picture.path = path;
 
-				var extension = data.file ? file.typeToExtension(data.file.type) : image.extensionFromBase64(data.imageData);
+				var type = data.file ? data.file.type : image.mimeFromBase64(data.imageData);
+				if (!type || !type.match(/^image./)) {
+					return next(new Error('[[error:invalid-image]]'));
+				}
+
+				var extension = file.typeToExtension(type);
 				var filename = generateProfileImageFilename(data.uid, 'profilecover', extension);
 				uploadProfileOrCover(filename, picture, next);
 			},
@@ -127,6 +132,9 @@ module.exports = function (User) {
 		}
 
 		var type = data.file ? data.file.type : image.mimeFromBase64(data.imageData);
+		if (!type || !type.match(/^image./)) {
+			return callback(new Error('[[error:invalid-image]]'));
+		}
 		var extension = file.typeToExtension(type);
 		if (!extension) {
 			return callback(new Error('[[error:invalid-image-extension]]'));

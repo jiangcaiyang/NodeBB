@@ -726,7 +726,6 @@ describe('Post\'s', function () {
 		});
 	});
 
-
 	describe('filterPidsByCid', function () {
 		it('should return pids as is if cid is falsy', function (done) {
 			posts.filterPidsByCid([1, 2, 3], null, function (err, pids) {
@@ -753,8 +752,17 @@ describe('Post\'s', function () {
 		});
 	});
 
+	it('should error if user does not exist', function (done) {
+		user.isReadyToPost(21123123, 1, function (err) {
+			assert.equal(err.message, '[[error:no-user]]');
+			done();
+		});
+	});
+
 	describe('post queue', function () {
 		var uid;
+		var queueId;
+		var jar;
 		before(function (done) {
 			meta.config.postQueue = 1;
 			user.create({ username: 'newuser' }, function (err, _uid) {
@@ -774,6 +782,7 @@ describe('Post\'s', function () {
 				assert.ifError(err);
 				assert.strictEqual(result.queued, true);
 				assert.equal(result.message, '[[success:post-queued]]');
+
 				done();
 			});
 		});
@@ -783,12 +792,14 @@ describe('Post\'s', function () {
 				assert.ifError(err);
 				assert.strictEqual(result.queued, true);
 				assert.equal(result.message, '[[success:post-queued]]');
+				queueId = result.id;
 				done();
 			});
 		});
 
 		it('should load queued posts', function (done) {
-			helpers.loginUser('globalmod', 'globalmodpwd', function (err, jar) {
+			helpers.loginUser('globalmod', 'globalmodpwd', function (err, _jar) {
+				jar = _jar;
 				assert.ifError(err);
 				request(nconf.get('url') + '/api/post-queue', { jar: jar, json: true }, function (err, res, body) {
 					assert.ifError(err);
@@ -801,7 +812,40 @@ describe('Post\'s', function () {
 			});
 		});
 
-		it('should accept queued posts submit', function (done) {
+		it('should error if data is invalid', function (done) {
+			socketPosts.editQueuedContent({ uid: globalModUid }, null, function (err) {
+				assert.equal(err.message, '[[error:invalid-data]]');
+				done();
+			});
+		});
+
+		it('should edit post in queue', function (done) {
+			socketPosts.editQueuedContent({ uid: globalModUid }, { id: queueId, content: 'newContent' }, function (err) {
+				assert.ifError(err);
+				request(nconf.get('url') + '/api/post-queue', { jar: jar, json: true }, function (err, res, body) {
+					assert.ifError(err);
+					assert.equal(body.posts[1].type, 'reply');
+					assert.equal(body.posts[1].data.content, 'newContent');
+					done();
+				});
+			});
+		});
+
+		it('should prevent regular users from approving posts', function (done) {
+			socketPosts.accept({ uid: uid }, { id: queueId }, function (err) {
+				assert.equal(err.message, '[[error:no-privileges]]');
+				done();
+			});
+		});
+
+		it('should prevent regular users from approving non existing posts', function (done) {
+			socketPosts.accept({ uid: uid }, { id: 123123 }, function (err) {
+				assert.equal(err.message, '[[error:no-privileges]]');
+				done();
+			});
+		});
+
+		it('should accept queued posts and submit', function (done) {
 			var ids;
 			async.waterfall([
 				function (next) {
@@ -815,13 +859,6 @@ describe('Post\'s', function () {
 					socketPosts.accept({ uid: globalModUid }, { id: ids[1] }, next);
 				},
 			], done);
-		});
-
-		it('should prevent regular users from approving posts', function (done) {
-			socketPosts.accept({ uid: uid }, { id: 1 }, function (err) {
-				assert.equal(err.message, '[[error:no-privileges]]');
-				done();
-			});
 		});
 	});
 });

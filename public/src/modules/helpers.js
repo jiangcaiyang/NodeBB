@@ -3,13 +3,13 @@
 (function (factory) {
 	if (typeof module === 'object' && module.exports) {
 		var relative_path = require('nconf').get('relative_path');
-		module.exports = factory(require('../utils'), require('benchpressjs'), require('string'), relative_path);
+		module.exports = factory(require('../utils'), require('benchpressjs'), relative_path);
 	} else if (typeof define === 'function' && define.amd) {
-		define('helpers', ['benchpress', 'string'], function (Benchpress, string) {
-			return factory(utils, Benchpress, string, config.relative_path);
+		define('helpers', ['benchpress'], function (Benchpress) {
+			return factory(utils, Benchpress, config.relative_path);
 		});
 	}
-}(function (utils, Benchpress, S, relative_path) {
+}(function (utils, Benchpress, relative_path) {
 	var helpers = {
 		displayMenuItem: displayMenuItem,
 		buildMetaTag: buildMetaTag,
@@ -77,8 +77,9 @@
 		var type = tag.type ? 'type="' + tag.type + '" ' : '';
 		var href = tag.href ? 'href="' + tag.href + '" ' : '';
 		var sizes = tag.sizes ? 'sizes="' + tag.sizes + '" ' : '';
+		var title = tag.title ? 'title="' + tag.title + '" ' : '';
 
-		return '<link ' + link + rel + type + sizes + href + '/>\n\t';
+		return '<link ' + link + rel + type + sizes + title + href + '/>\n\t';
 	}
 
 	function stringify(obj) {
@@ -91,7 +92,7 @@
 	}
 
 	function stripTags(str) {
-		return S(String(str)).stripTags().s;
+		return utils.stripHTMLTags(str);
 	}
 
 	function generateCategoryBackground(category) {

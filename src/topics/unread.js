@@ -75,6 +75,10 @@ module.exports = function (Topics) {
 
 		var cutoff = params.cutoff || Topics.unreadCutoff();
 
+		if (params.cid && !Array.isArray(params.cid)) {
+			params.cid = [params.cid];
+		}
+
 		async.waterfall([
 			function (next) {
 				async.parallel({
@@ -125,6 +129,8 @@ module.exports = function (Topics) {
 
 				if (params.filter === 'watched') {
 					Topics.filterWatchedTids(tids, uid, next);
+				} else if (params.filter === 'unreplied') {
+					Topics.filterUnrepliedTids(tids, next);
 				} else {
 					next(null, tids);
 				}
@@ -179,10 +185,11 @@ module.exports = function (Topics) {
 			},
 			function (results, next) {
 				var topics = results.topics;
+				cid = cid && cid.map(String);
 				tids = topics.filter(function (topic, index) {
 					return topic && topic.cid &&
 						(!!results.isTopicsFollowed[index] || results.ignoredCids.indexOf(topic.cid.toString()) === -1) &&
-						(!cid || parseInt(cid, 10) === parseInt(topic.cid, 10));
+						(!cid || (cid.length && cid.indexOf(String(topic.cid)) !== -1));
 				}).map(function (topic) {
 					return topic.tid;
 				});
@@ -385,6 +392,20 @@ module.exports = function (Topics) {
 			function (scores, next) {
 				tids = tids.filter(function (tid, index) {
 					return tid && !scores[index];
+				});
+				next(null, tids);
+			},
+		], callback);
+	};
+
+	Topics.filterUnrepliedTids = function (tids, callback) {
+		async.waterfall([
+			function (next) {
+				db.sortedSetScores('topics:posts', tids, next);
+			},
+			function (scores, next) {
+				tids = tids.filter(function (tid, index) {
+					return tid && scores[index] <= 1;
 				});
 				next(null, tids);
 			},

@@ -22,30 +22,28 @@ var helpers = require('./helpers');
 var setupPageRoute = helpers.setupPageRoute;
 
 function mainRoutes(app, middleware, controllers) {
-	setupPageRoute(app, '/', middleware, [], controllers.home);
-
 	var loginRegisterMiddleware = [middleware.redirectToAccountIfLoggedIn];
 
 	setupPageRoute(app, '/login', middleware, loginRegisterMiddleware, controllers.login);
 	setupPageRoute(app, '/register', middleware, loginRegisterMiddleware, controllers.register);
 	setupPageRoute(app, '/register/complete', middleware, [], controllers.registerInterstitial);
-	setupPageRoute(app, '/compose', middleware, [], controllers.compose);
+	setupPageRoute(app, '/compose', middleware, [], controllers.composer.get);
 	setupPageRoute(app, '/confirm/:code', middleware, [], controllers.confirmEmail);
 	setupPageRoute(app, '/outgoing', middleware, [], controllers.outgoing);
 	setupPageRoute(app, '/search', middleware, [], controllers.search.search);
 	setupPageRoute(app, '/reset/:code?', middleware, [middleware.delayLoading], controllers.reset);
 	setupPageRoute(app, '/tos', middleware, [], controllers.termsOfUse);
 
-	app.post('/compose', middleware.applyCSRF, controllers.composePost);
+	app.post('/compose', middleware.applyCSRF, controllers.composer.post);
 }
 
 function modRoutes(app, middleware, controllers) {
 	setupPageRoute(app, '/flags', middleware, [], controllers.mods.flags.list);
 	setupPageRoute(app, '/flags/:flagId', middleware, [], controllers.mods.flags.detail);
+	setupPageRoute(app, '/post-queue', middleware, [], controllers.mods.postQueue);
 }
 
 function globalModRoutes(app, middleware, controllers) {
-	setupPageRoute(app, '/post-queue', middleware, [], controllers.globalMods.postQueue);
 	setupPageRoute(app, '/ip-blacklist', middleware, [], controllers.globalMods.ipBlacklist);
 }
 
@@ -123,6 +121,9 @@ module.exports = function (app, middleware, hotswapIds, callback) {
 
 	app.use(middleware.stripLeadingSlashes);
 
+	// handle custom homepage routes
+	app.use(relativePath, controllers.home);
+
 	adminRoutes(router, middleware, controllers);
 	metaRoutes(router, middleware, controllers);
 	apiRoutes(router, middleware, controllers);
@@ -170,6 +171,9 @@ module.exports = function (app, middleware, hotswapIds, callback) {
 		res.redirect(relativePath + '/assets/uploads' + req.path + '?' + meta.config['cache-buster']);
 	});
 
+	// only warn once
+	var warned = new Set();
+
 	// DEPRECATED
 	var deprecatedPaths = [
 		'/nodebb.min.js',
@@ -188,8 +192,11 @@ module.exports = function (app, middleware, hotswapIds, callback) {
 	];
 	app.use(relativePath, function (req, res, next) {
 		if (deprecatedPaths.some(function (path) { return req.path.startsWith(path); })) {
-			winston.verbose('[deprecated] Accessing `' + req.path.slice(1) + '` from `/` is deprecated. ' +
+			if (!warned.has(req.path)) {
+				winston.warn('[deprecated] Accessing `' + req.path.slice(1) + '` from `/` is deprecated to be REMOVED in NodeBB v1.7.0. ' +
 				'Use `/assets' + req.path + '` to access this file.');
+				warned.add(req.path);
+			}
 			res.redirect(relativePath + '/assets' + req.path + '?' + meta.config['cache-buster']);
 		} else {
 			next();
@@ -197,8 +204,11 @@ module.exports = function (app, middleware, hotswapIds, callback) {
 	});
 	// DEPRECATED
 	app.use(relativePath + '/api/language', function (req, res) {
-		winston.verbose('[deprecated] Accessing language files from `/api/language` is deprecated. ' +
+		if (!warned.has(req.path)) {
+			winston.warn('[deprecated] Accessing language files from `/api/language` is deprecated to be REMOVED in NodeBB v1.7.0. ' +
 			'Use `/assets/language' + req.path + '.json` for prefetch paths.');
+			warned.add(req.path);
+		}
 		res.redirect(relativePath + '/assets/language' + req.path + '.json?' + meta.config['cache-buster']);
 	});
 

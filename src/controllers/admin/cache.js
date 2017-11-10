@@ -2,10 +2,12 @@
 
 var cacheController = module.exports;
 
+var utils = require('../../utils');
+
 cacheController.get = function (req, res) {
 	var postCache = require('../../posts/cache');
 	var groupCache = require('../../groups').cache;
-	var userSettingsCache = require('../../user').settingsCache;
+	var objectCache = require('../../database').objectCache;
 
 	var avgPostSize = 0;
 	var percentFull = 0;
@@ -14,19 +16,13 @@ cacheController.get = function (req, res) {
 		percentFull = ((postCache.length / postCache.max) * 100).toFixed(2);
 	}
 
-	res.render('admin/advanced/cache', {
+	var data = {
 		postCache: {
 			length: postCache.length,
 			max: postCache.max,
 			itemCount: postCache.itemCount,
 			percentFull: percentFull,
 			avgPostSize: avgPostSize,
-		},
-		userSettingsCache: {
-			length: userSettingsCache.length,
-			max: userSettingsCache.max,
-			itemCount: userSettingsCache.itemCount,
-			percentFull: ((userSettingsCache.length / userSettingsCache.max) * 100).toFixed(2),
 		},
 		groupCache: {
 			length: groupCache.length,
@@ -35,5 +31,20 @@ cacheController.get = function (req, res) {
 			percentFull: ((groupCache.length / groupCache.max) * 100).toFixed(2),
 			dump: req.query.debug ? JSON.stringify(groupCache.dump(), null, 4) : false,
 		},
-	});
+	};
+
+	if (objectCache) {
+		data.objectCache = {
+			length: objectCache.length,
+			max: objectCache.max,
+			itemCount: objectCache.itemCount,
+			percentFull: ((objectCache.length / objectCache.max) * 100).toFixed(2),
+			dump: req.query.debug ? JSON.stringify(objectCache.dump(), null, 4) : false,
+			hits: utils.addCommas(String(objectCache.hits)),
+			misses: utils.addCommas(String(objectCache.misses)),
+			missRatio: (1 - (objectCache.hits / (objectCache.hits + objectCache.misses))).toFixed(4),
+		};
+	}
+
+	res.render('admin/advanced/cache', data);
 };

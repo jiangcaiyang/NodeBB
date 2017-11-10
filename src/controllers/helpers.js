@@ -32,6 +32,32 @@ helpers.noScriptErrors = function (req, res, error, httpStatus) {
 	});
 };
 
+helpers.validFilters = { '': true, new: true, watched: true, unreplied: true };
+
+helpers.buildFilters = function (url, filter) {
+	return [{
+		name: '[[unread:all-topics]]',
+		url: url,
+		selected: filter === '',
+		filter: '',
+	}, {
+		name: '[[unread:new-topics]]',
+		url: url + '/new',
+		selected: filter === 'new',
+		filter: 'new',
+	}, {
+		name: '[[unread:watched-topics]]',
+		url: url + '/watched',
+		selected: filter === 'watched',
+		filter: 'watched',
+	}, {
+		name: '[[unread:unreplied-topics]]',
+		url: url + '/unreplied',
+		selected: filter === 'unreplied',
+		filter: 'unreplied',
+	}];
+};
+
 helpers.notAllowed = function (req, res, error) {
 	plugins.fireHook('filter:helpers.notAllowed', {
 		req: req,
@@ -153,6 +179,9 @@ helpers.buildTitle = function (pageTitle) {
 };
 
 helpers.getWatchedCategories = function (uid, selectedCid, callback) {
+	if (selectedCid && !Array.isArray(selectedCid)) {
+		selectedCid = [selectedCid];
+	}
 	async.waterfall([
 		function (next) {
 			user.getWatchedCategories(uid, next);
@@ -167,14 +196,30 @@ helpers.getWatchedCategories = function (uid, selectedCid, callback) {
 			categoryData = categoryData.filter(function (category) {
 				return category && !category.link;
 			});
-
-			var selectedCategory;
+			var selectedCategory = [];
+			var selectedCids = [];
 			categoryData.forEach(function (category) {
-				category.selected = parseInt(category.cid, 10) === parseInt(selectedCid, 10);
+				category.selected = selectedCid ? selectedCid.indexOf(String(category.cid)) !== -1 : false;
 				if (category.selected) {
-					selectedCategory = category;
+					selectedCategory.push(category);
+					selectedCids.push(parseInt(category.cid, 10));
 				}
 			});
+			selectedCids.sort(function (a, b) {
+				return a - b;
+			});
+
+			if (selectedCategory.length > 1) {
+				selectedCategory = {
+					icon: 'fa-plus',
+					name: '[[unread:multiple-categories-selected]]',
+					bgColor: '#ddd',
+				};
+			} else if (selectedCategory.length === 1) {
+				selectedCategory = selectedCategory[0];
+			} else {
+				selectedCategory = undefined;
+			}
 
 			var categoriesData = [];
 			var tree = categories.getTree(categoryData, 0);
@@ -183,7 +228,7 @@ helpers.getWatchedCategories = function (uid, selectedCid, callback) {
 				recursive(category, categoriesData, '');
 			});
 
-			next(null, { categories: categoriesData, selectedCategory: selectedCategory });
+			next(null, { categories: categoriesData, selectedCategory: selectedCategory, selectedCids: selectedCids });
 		},
 	], callback);
 };

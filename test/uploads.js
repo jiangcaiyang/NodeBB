@@ -13,8 +13,8 @@ var user = require('../src/user');
 var groups = require('../src/groups');
 var privileges = require('../src/privileges');
 var meta = require('../src/meta');
+var socketUser = require('../src/socket.io/user');
 var helpers = require('./helpers');
-
 
 describe('Upload Controllers', function () {
 	var tid;
@@ -73,6 +73,15 @@ describe('Upload Controllers', function () {
 				assert(Array.isArray(body));
 				assert.equal(body.length, 1);
 				assert.equal(body[0].url, '/assets/uploads/profile/' + regularUid + '-profileavatar.png');
+				done();
+			});
+		});
+
+		it('should fail to upload an image to a post with invalid cid', function (done) {
+			helpers.uploadFile(nconf.get('url') + '/api/post/upload', path.join(__dirname, '../test/files/test.png'), { cid: '0' }, jar, csrf_token, function (err, res, body) {
+				assert.ifError(err);
+				assert.equal(res.statusCode, 500);
+				assert.equal(body.error, '[[error:category-not-selected]]');
 				done();
 			});
 		});
@@ -148,8 +157,21 @@ describe('Upload Controllers', function () {
 				done();
 			});
 		});
-	});
 
+		it('should not allow non image uploads', function (done) {
+			socketUser.updateCover({ uid: 1 }, { uid: 1, imageData: 'data:text/html;base64,PHN2Zy9vbmxvYWQ9YWxlcnQoMik+' }, function (err) {
+				assert.equal(err.message, '[[error:invalid-image]]');
+				done();
+			});
+		});
+
+		it('should not allow non image uploads', function (done) {
+			socketUser.uploadCroppedPicture({ uid: 1 }, { uid: 1, imageData: 'data:text/html;base64,PHN2Zy9vbmxvYWQ9YWxlcnQoMik+' }, function (err) {
+				assert.equal(err.message, '[[error:invalid-image]]');
+				done();
+			});
+		});
+	});
 
 	describe('admin uploads', function () {
 		var jar;

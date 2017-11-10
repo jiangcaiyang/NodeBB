@@ -72,7 +72,6 @@ JS.scripts = {
 		'public/src/modules/alerts.js',
 		'public/src/modules/taskbar.js',
 		'public/src/modules/helpers.js',
-		'public/src/modules/string.js',
 		'public/src/modules/flags.js',
 		'public/src/modules/storage.js',
 	],
@@ -87,6 +86,14 @@ JS.scripts = {
 		ace: 'node_modules/ace-builds/src-min',
 	},
 };
+
+function linkIfLinux(srcPath, destPath, next) {
+	if (process.platform === 'win32') {
+		file.copyFile(srcPath, destPath, next);
+	} else {
+		file.link(srcPath, destPath, true, next);
+	}
+}
 
 var basePath = path.resolve(__dirname, '../..');
 
@@ -120,7 +127,7 @@ function minifyModules(modules, fork, callback) {
 			},
 			function (cb) {
 				async.eachLimit(filtered.skip, 500, function (mod, next) {
-					file.link(mod.srcPath, mod.destPath, next);
+					linkIfLinux(mod.srcPath, mod.destPath, next);
 				}, cb);
 			},
 		], callback);
@@ -148,20 +155,10 @@ function linkModules(callback) {
 				return next(err);
 			}
 			if (res.stats.isDirectory()) {
-				return file.linkDirs(srcPath, destPath, next);
+				return file.linkDirs(srcPath, destPath, true, next);
 			}
 
-			if (process.platform === 'win32') {
-				fs.readFile(srcPath, function (err, file) {
-					if (err) {
-						return next(err);
-					}
-
-					fs.writeFile(destPath, file, next);
-				});
-			} else {
-				file.link(srcPath, destPath, next);
-			}
+			linkIfLinux(srcPath, destPath, next);
 		});
 	}, callback);
 }
@@ -267,7 +264,7 @@ JS.linkStatics = function (callback) {
 					return next(err);
 				}
 
-				file.linkDirs(sourceDir, destDir, next);
+				file.linkDirs(sourceDir, destDir, true, next);
 			});
 		}, callback);
 	});

@@ -330,7 +330,7 @@ $(document).ready(function () {
 	};
 
 	ajaxify.loadTemplate = function (template, callback) {
-		require([config.relative_path + '/assets/templates/' + template + '.jst'], callback, function (err) {
+		require([config.relative_path + '/assets/templates/' + template + '.js'], callback, function (err) {
 			console.error('Unable to load template: ' + template);
 			throw err;
 		});
@@ -368,10 +368,9 @@ $(document).ready(function () {
 							window.open(this.href, '_blank');
 							e.preventDefault();
 						} else if (config.useOutgoingLinksPage) {
-							var safeUrls = config.outgoingLinksWhitelist.trim().split(/[\s,]+/g);
+							var safeUrls = config.outgoingLinksWhitelist.trim().split(/[\s,]+/g).filter(Boolean);
 							var href = this.href;
-
-							if (!safeUrls.some(function (url) { return href.indexOf(url) !== -1; })) {
+							if (!safeUrls.length || !safeUrls.some(function (url) { return href.indexOf(url) !== -1; })) {
 								ajaxify.go('outgoing?url=' + encodeURIComponent(href));
 								e.preventDefault();
 							}

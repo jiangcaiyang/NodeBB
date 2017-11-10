@@ -92,17 +92,18 @@ function renderWidget(widget, uid, options, callback) {
 			}
 
 			if (widget.data.container && widget.data.container.match('{body}')) {
-				translator.translate(widget.data.title, function (title) {
-					Benchpress.compileParse(widget.data.container, {
-						title: title,
-						body: html,
-					}, function (err, html) {
-						next(err, { html: html });
-					});
-				});
+				Benchpress.compileParse(widget.data.container, {
+					title: widget.data.title,
+					body: html,
+				}, next);
 			} else {
-				next(null, { html: html });
+				next(null, html);
 			}
+		},
+		function (html, next) {
+			translator.translate(html, function (translatedHtml) {
+				next(null, { html: translatedHtml });
+			});
 		},
 	], callback);
 }
@@ -217,34 +218,31 @@ widgets.reset = function (callback) {
 };
 
 widgets.resetTemplate = function (template, callback) {
-	db.getObject('widgets:' + template + '.tpl', function (err, area) {
-		if (err) {
-			return callback();
-		}
-
-		var toBeDrafted = [];
-		for (var location in area) {
-			if (area.hasOwnProperty(location)) {
-				toBeDrafted = toBeDrafted.concat(JSON.parse(area[location]));
+	var toBeDrafted = [];
+	async.waterfall([
+		function (next) {
+			db.getObject('widgets:' + template + '.tpl', next);
+		},
+		function (area, next) {
+			for (var location in area) {
+				if (area.hasOwnProperty(location)) {
+					toBeDrafted = toBeDrafted.concat(JSON.parse(area[location]));
+				}
 			}
-		}
-
-		db.delete('widgets:' + template + '.tpl');
-		db.getObjectField('widgets:global', 'drafts', function (err, draftWidgets) {
-			if (err) {
-				return callback();
-			}
-
+			db.delete('widgets:' + template + '.tpl', next);
+		},
+		function (next) {
+			db.getObjectField('widgets:global', 'drafts', next);
+		},
+		function (draftWidgets, next) {
 			draftWidgets = JSON.parse(draftWidgets).concat(toBeDrafted);
-			db.setObjectField('widgets:global', 'drafts', JSON.stringify(draftWidgets), callback);
-		});
-	});
+			db.setObjectField('widgets:global', 'drafts', JSON.stringify(draftWidgets), next);
+		},
+	], callback);
 };
 
 widgets.resetTemplates = function (templates, callback) {
-	async.eachSeries(templates, function (template, next) {
-		widgets.resetTemplate(template, next);
-	}, callback);
+	async.eachSeries(templates, widgets.resetTemplate, callback);
 };
 
 module.exports = widgets;

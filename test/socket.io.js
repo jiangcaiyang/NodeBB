@@ -72,7 +72,8 @@ describe('socket.io', function () {
 				helpers.connectSocketIO(res, function (err, _io) {
 					io = _io;
 					assert.ifError(err);
-					done(err);
+
+					done();
 				});
 			});
 		});
@@ -378,7 +379,6 @@ describe('socket.io', function () {
 						assert(data.hasOwnProperty('socketCount'));
 						assert(data.hasOwnProperty('topics'));
 						assert(data.hasOwnProperty('users'));
-						assert.equal(data.topics['1'].title, 'test topic title');
 						done();
 					});
 				}, 1000);
@@ -513,7 +513,7 @@ describe('socket.io', function () {
 	});
 
 	it('should error with invalid data', function (done) {
-		var data = { template: 'global', location: 'sidebar', widgets: [{ widget: 'html', data: { html: 'test', title: 'test', container: '' } }] };
+		var data = [{ template: 'global', location: 'sidebar', widgets: [{ widget: 'html', data: { html: 'test', title: 'test', container: '' } }] }];
 		socketAdmin.widgets.set({ uid: adminUid }, data, function (err) {
 			assert.ifError(err);
 			db.getObjectField('widgets:global', 'sidebar', function (err, widgetData) {

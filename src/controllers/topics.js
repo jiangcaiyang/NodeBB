@@ -2,7 +2,6 @@
 
 
 var async = require('async');
-var S = require('string');
 var nconf = require('nconf');
 
 var user = require('../user');
@@ -217,7 +216,7 @@ function addTags(topicData, req, res) {
 	var postAtIndex = findPost(Math.max(0, req.params.post_index - 1));
 
 	if (postAtIndex && postAtIndex.content) {
-		description = S(postAtIndex.content).decodeHTMLEntities().stripTags().s;
+		description = utils.stripHTMLTags(utils.decodeHTMLEntities(postAtIndex.content));
 	}
 
 	if (description.length > 255) {
@@ -227,6 +226,8 @@ function addTags(topicData, req, res) {
 	var ogImageUrl = '';
 	if (topicData.thumb) {
 		ogImageUrl = topicData.thumb;
+	} else if (topicData.category.backgroundImage && (!postAtIndex || !postAtIndex.index)) {
+		ogImageUrl = topicData.category.backgroundImage;
 	} else if (postAtIndex && postAtIndex.user && postAtIndex.user.picture) {
 		ogImageUrl = postAtIndex.user.picture;
 	} else if (meta.config['og:image']) {
@@ -292,6 +293,10 @@ function addTags(topicData, req, res) {
 			rel: 'alternate',
 			type: 'application/rss+xml',
 			href: topicData.rssFeedUrl,
+		},
+		{
+			rel: 'canonical',
+			href: nconf.get('url') + '/topic/' + topicData.slug,
 		},
 	];
 

@@ -176,13 +176,20 @@ SocketPosts.reject = function (socket, data, callback) {
 	acceptOrReject(posts.removeFromQueue, socket, data, callback);
 };
 
+SocketPosts.editQueuedContent = function (socket, data, callback) {
+	if (!data || !data.id || !data.content) {
+		return callback(new Error('[[error:invalid-data]]'));
+	}
+	posts.editQueuedContent(socket.uid, data.id, data.content, callback);
+};
+
 function acceptOrReject(method, socket, data, callback) {
 	async.waterfall([
 		function (next) {
-			user.isAdminOrGlobalMod(socket.uid, next);
+			posts.canEditQueue(socket.uid, data.id, next);
 		},
-		function (isAdminOrGlobalMod, next) {
-			if (!isAdminOrGlobalMod) {
+		function (canEditQueue, next) {
+			if (!canEditQueue) {
 				return callback(new Error('[[error:no-privileges]]'));
 			}
 

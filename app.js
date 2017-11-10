@@ -28,7 +28,6 @@ if (require.main !== module) {
 var nconf = require('nconf');
 nconf.argv().env({
 	separator: '__',
-	lowerCase: true,
 });
 
 var url = require('url');
@@ -37,7 +36,7 @@ var winston = require('winston');
 var path = require('path');
 var pkg = require('./package.json');
 var file = require('./src/file');
-var debug = require('./src/meta/debugParams')().execArgv.length;
+var debug = require('./src/meta/debugFork').debugging;
 
 global.env = process.env.NODE_ENV || 'production';
 
@@ -193,7 +192,8 @@ function setup() {
 		process.stdout.write('\n' + separator + '\n\n');
 
 		if (err) {
-			winston.error('There was a problem completing NodeBB setup: ', err.message);
+			winston.error('There was a problem completing NodeBB setup', err);
+			throw err;
 		} else {
 			if (data.hasOwnProperty('password')) {
 				process.stdout.write('An administrative user was automatically created for you:\n');
@@ -219,14 +219,13 @@ function upgrade() {
 	var meta = require('./src/meta');
 	var upgrade = require('./src/upgrade');
 	var build = require('./src/meta/build');
-	var tasks = [db.init, meta.configs.init, upgrade.run, build.buildAll];
+	var tasks = [db.init, meta.configs.init];
 
 	if (nconf.get('upgrade') !== true) {
 		// Likely an upgrade script name passed in
-		tasks[2] = async.apply(upgrade.runSingle, nconf.get('upgrade'));
-
-		// Skip build
-		tasks.pop();
+		tasks.push(async.apply(upgrade.runParticular, nconf.get('upgrade').split(',')));
+	} else {
+		tasks.push(upgrade.run, build.buildAll);
 	}
 	// disable mongo timeouts during upgrade
 	nconf.set('mongo:options:socketTimeoutMS', 0);
@@ -272,9 +271,10 @@ function activate() {
 		},
 	], function (err) {
 		if (err) {
-			winston.error(err.message);
+			winston.error('An error occurred during plugin activation', err);
+			throw err;
 		}
-		process.exit(err ? 1 : 0);
+		process.exit(0);
 	});
 }
 

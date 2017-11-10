@@ -7,11 +7,11 @@ var validator = require('validator');
 var meta = require('../meta');
 var user = require('../user');
 var plugins = require('../plugins');
-var topics = require('../topics');
 var helpers = require('./helpers');
 
 var Controllers = module.exports;
 
+Controllers.home = require('./home');
 Controllers.topics = require('./topics');
 Controllers.posts = require('./posts');
 Controllers.categories = require('./categories');
@@ -34,76 +34,34 @@ Controllers.sitemap = require('./sitemap');
 Controllers.osd = require('./osd');
 Controllers['404'] = require('./404');
 Controllers.errors = require('./errors');
-
-Controllers.home = function (req, res, next) {
-	var route = meta.config.homePageRoute || (meta.config.homePageCustom || '').replace(/^\/+/, '') || 'categories';
-
-	user.getSettings(req.uid, function (err, settings) {
-		if (err) {
-			return next(err);
-		}
-		if (parseInt(meta.config.allowUserHomePage, 10) === 1 && settings.homePageRoute !== 'undefined' && settings.homePageRoute !== 'none') {
-			route = settings.homePageRoute || route;
-		}
-
-		var hook = 'action:homepage.get:' + route;
-
-		if (plugins.hasListeners(hook)) {
-			return plugins.fireHook(hook, {
-				req: req,
-				res: res,
-				next: next,
-			});
-		}
-
-		if (route === 'categories' || route === '/') {
-			Controllers.categories.list(req, res, next);
-		} else if (route === 'unread') {
-			Controllers.unread.get(req, res, next);
-		} else if (route === 'recent') {
-			Controllers.recent.get(req, res, next);
-		} else if (route === 'popular') {
-			Controllers.popular.get(req, res, next);
-		} else {
-			var match = /^category\/(\d+)\/(.*)$/.exec(route);
-
-			if (match) {
-				req.params.topic_index = '1';
-				req.params.category_id = match[1];
-				req.params.slug = match[2];
-				Controllers.category.get(req, res, next);
-			} else {
-				res.redirect(route);
-			}
-		}
-	});
-};
+Controllers.composer = require('./composer');
 
 Controllers.reset = function (req, res, next) {
 	if (req.params.code) {
-		user.reset.validate(req.params.code, function (err, valid) {
-			if (err) {
-				return next(err);
-			}
-			res.render('reset_code', {
-				valid: valid,
-				displayExpiryNotice: req.session.passwordExpired,
-				code: req.params.code,
-				minimumPasswordLength: parseInt(meta.config.minimumPasswordLength, 10),
-				breadcrumbs: helpers.buildBreadcrumbs([
-					{
-						text: '[[reset_password:reset_password]]',
-						url: '/reset',
-					},
-					{
-						text: '[[reset_password:update_password]]',
-					},
-				]),
-				title: '[[pages:reset]]',
-			});
-
-			delete req.session.passwordExpired;
-		});
+		async.waterfall([
+			function (next) {
+				user.reset.validate(req.params.code, next);
+			},
+			function (valid) {
+				res.render('reset_code', {
+					valid: valid,
+					displayExpiryNotice: req.session.passwordExpired,
+					code: req.params.code,
+					minimumPasswordLength: parseInt(meta.config.minimumPasswordLength, 10),
+					breadcrumbs: helpers.buildBreadcrumbs([
+						{
+							text: '[[reset_password:reset_password]]',
+							url: '/reset',
+						},
+						{
+							text: '[[reset_password:update_password]]',
+						},
+					]),
+					title: '[[pages:reset]]',
+				});
+				delete req.session.passwordExpired;
+			},
+		], next);
 	} else {
 		res.render('reset', {
 			code: null,
@@ -194,32 +152,30 @@ Controllers.register = function (req, res, next) {
 				},
 			}, next);
 		},
-	], function (err, termsOfUse) {
-		if (err) {
-			return next(err);
-		}
-		var loginStrategies = require('../routes/authentication').getLoginStrategies();
-		var data = {
-			'register_window:spansize': loginStrategies.length ? 'col-md-6' : 'col-md-12',
-			alternate_logins: !!loginStrategies.length,
-		};
+		function (termsOfUse) {
+			var loginStrategies = require('../routes/authentication').getLoginStrategies();
+			var data = {
+				'register_window:spansize': loginStrategies.length ? 'col-md-6' : 'col-md-12',
+				alternate_logins: !!loginStrategies.length,
+			};
 
-		data.authentication = loginStrategies;
+			data.authentication = loginStrategies;
 
-		data.minimumUsernameLength = parseInt(meta.config.minimumUsernameLength, 10);
-		data.maximumUsernameLength = parseInt(meta.config.maximumUsernameLength, 10);
-		data.minimumPasswordLength = parseInt(meta.config.minimumPasswordLength, 10);
-		data.minimumPasswordStrength = parseInt(meta.config.minimumPasswordStrength || 0, 10);
-		data.termsOfUse = termsOfUse.postData.content;
-		data.breadcrumbs = helpers.buildBreadcrumbs([{
-			text: '[[register:register]]',
-		}]);
-		data.regFormEntry = [];
-		data.error = req.flash('error')[0] || errorText;
-		data.title = '[[pages:register]]';
+			data.minimumUsernameLength = parseInt(meta.config.minimumUsernameLength, 10);
+			data.maximumUsernameLength = parseInt(meta.config.maximumUsernameLength, 10);
+			data.minimumPasswordLength = parseInt(meta.config.minimumPasswordLength, 10);
+			data.minimumPasswordStrength = parseInt(meta.config.minimumPasswordStrength || 0, 10);
+			data.termsOfUse = termsOfUse.postData.content;
+			data.breadcrumbs = helpers.buildBreadcrumbs([{
+				text: '[[register:register]]',
+			}]);
+			data.regFormEntry = [];
+			data.error = req.flash('error')[0] || errorText;
+			data.title = '[[pages:register]]';
 
-		res.render('register', data);
-	});
+			res.render('register', data);
+		},
+	], next);
 };
 
 Controllers.registerInterstitial = function (req, res, next) {
@@ -256,69 +212,6 @@ Controllers.registerInterstitial = function (req, res, next) {
 			});
 		},
 	], next);
-};
-
-Controllers.compose = function (req, res, next) {
-	plugins.fireHook('filter:composer.build', {
-		req: req,
-		res: res,
-		next: next,
-		templateData: {},
-	}, function (err, data) {
-		if (err) {
-			return next(err);
-		}
-
-		if (data.templateData.disabled) {
-			res.render('', {
-				title: '[[modules:composer.compose]]',
-			});
-		} else {
-			data.templateData.title = '[[modules:composer.compose]]';
-			res.render('compose', data.templateData);
-		}
-	});
-};
-
-Controllers.composePost = function (req, res) {
-	var body = req.body;
-	var data = {
-		uid: req.uid,
-		req: req,
-		timestamp: Date.now(),
-		content: body.content,
-	};
-	req.body.noscript = 'true';
-
-	if (!data.content) {
-		return helpers.noScriptErrors(req, res, '[[error:invalid-data]]', 400);
-	}
-
-	if (body.tid) {
-		data.tid = body.tid;
-
-		topics.reply(data, function (err, result) {
-			if (err) {
-				return helpers.noScriptErrors(req, res, err.message, 400);
-			}
-			user.updateOnlineUsers(result.uid);
-
-			res.redirect(nconf.get('relative_path') + '/post/' + result.pid);
-		});
-	} else if (body.cid) {
-		data.cid = body.cid;
-		data.title = body.title;
-		data.tags = [];
-		data.thumb = '';
-
-		topics.post(data, function (err, result) {
-			if (err) {
-				return helpers.noScriptErrors(req, res, err.message, 400);
-			}
-
-			res.redirect(nconf.get('relative_path') + '/topic/' + result.topicData.slug);
-		});
-	}
 };
 
 Controllers.confirmEmail = function (req, res) {
@@ -390,8 +283,10 @@ Controllers.manifest = function (req, res) {
 
 Controllers.outgoing = function (req, res, next) {
 	var url = req.query.url || '';
+	var allowedProtocols = ['http', 'https', 'ftp', 'ftps', 'mailto', 'news', 'irc', 'gopher', 'nntp', 'feed', 'telnet', 'mms', 'rtsp', 'svn', 'tel', 'fax', 'xmpp', 'webcal'];
+	var parsed = require('url').parse(url);
 
-	if (!url) {
+	if (!url || !allowedProtocols.includes(parsed.protocol.slice(0, -1))) {
 		return next();
 	}
 

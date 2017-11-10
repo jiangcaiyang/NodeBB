@@ -2,6 +2,7 @@
 
 var async = require('async');
 var nconf = require('nconf');
+var jsesc = require('jsesc');
 
 var db = require('../database');
 var user = require('../user');
@@ -60,14 +61,11 @@ module.exports = function (middleware) {
 			bodyClass: data.bodyClass,
 		};
 
-		templateValues.configJSON = JSON.stringify(res.locals.config);
+		templateValues.configJSON = jsesc(JSON.stringify(res.locals.config), { isScriptContext: true });
 
 		async.waterfall([
 			function (next) {
 				async.parallel({
-					scripts: function (next) {
-						plugins.fireHook('filter:scripts.get', [], next);
-					},
 					isAdmin: function (next) {
 						user.isAdministrator(req.uid, next);
 					},
@@ -82,6 +80,7 @@ module.exports = function (middleware) {
 							uid: 0,
 							username: '[[global:guest]]',
 							userslug: '',
+							fullname: '[[global:guest]]',
 							email: '',
 							picture: user.getDefaultAvatar(),
 							status: 'offline',
@@ -126,7 +125,7 @@ module.exports = function (middleware) {
 				results.user.isGlobalMod = results.isGlobalMod;
 				results.user.isMod = !!results.isModerator;
 				results.user.uid = parseInt(results.user.uid, 10);
-				results.user.email = String(results.user.email).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+				results.user.email = String(results.user.email);
 				results.user['email:confirmed'] = parseInt(results.user['email:confirmed'], 10) === 1;
 				results.user.isEmailConfirmSent = !!results.isEmailConfirmSent;
 
@@ -140,11 +139,11 @@ module.exports = function (middleware) {
 				templateValues.isGlobalMod = results.user.isGlobalMod;
 				templateValues.showModMenu = results.user.isAdmin || results.user.isGlobalMod || results.user.isMod;
 				templateValues.user = results.user;
-				templateValues.userJSON = JSON.stringify(results.user);
+				templateValues.userJSON = jsesc(JSON.stringify(results.user), { isScriptContext: true });
 				templateValues.useCustomCSS = parseInt(meta.config.useCustomCSS, 10) === 1 && meta.config.customCSS;
 				templateValues.customCSS = templateValues.useCustomCSS ? (meta.config.renderedCustomCSS || '') : '';
-				templateValues.useCustomJS = parseInt(meta.config.useCustomJS, 10) === 1;
-				templateValues.customJS = templateValues.useCustomJS ? meta.config.customJS : '';
+				templateValues.useCustomHTML = parseInt(meta.config.useCustomHTML, 10) === 1;
+				templateValues.customHTML = templateValues.useCustomHTML ? meta.config.customHTML : '';
 				templateValues.maintenanceHeader = parseInt(meta.config.maintenanceMode, 10) === 1 && !results.isAdmin;
 				templateValues.defaultLang = meta.config.defaultLang || 'en-GB';
 				templateValues.userLang = res.locals.config.userLang;
@@ -154,12 +153,6 @@ module.exports = function (middleware) {
 
 				templateValues.template = { name: res.locals.template };
 				templateValues.template[res.locals.template] = true;
-
-				templateValues.scripts = results.scripts.map(function (script) {
-					return { src: script };
-				});
-
-				addTimeagoLocaleScript(templateValues.scripts, res.locals.config.userLang);
 
 				if (req.route && req.route.path === '/') {
 					modifyTitle(templateValues);
@@ -192,6 +185,21 @@ module.exports = function (middleware) {
 				}, next);
 			},
 			function (data, next) {
+				async.parallel({
+					scripts: async.apply(plugins.fireHook, 'filter:scripts.get', []),
+				}, function (err, results) {
+					next(err, data, results);
+				});
+			},
+			function (data, results, next) {
+				data.templateValues.scripts = results.scripts.map(function (script) {
+					return { src: script };
+				});
+				addTimeagoLocaleScript(data.templateValues.scripts, res.locals.config.userLang);
+
+				data.templateValues.useCustomJS = parseInt(meta.config.useCustomJS, 10) === 1;
+				data.templateValues.customJS = data.templateValues.useCustomJS ? meta.config.customJS : '';
+
 				req.app.render('footer', data.templateValues, next);
 			},
 		], callback);

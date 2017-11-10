@@ -26,7 +26,7 @@ module.exports = {
 				}
 
 				fs.access(sourcePath, function (err) {
-					if (err) {
+					if (err || path.extname(sourcePath) === '.svg') {
 						skip = true;
 						return setImmediate(next);
 					}
@@ -45,7 +45,8 @@ module.exports = {
 				}
 
 				meta.configs.setMultiple({
-					'brand:logo': path.join(nconf.get('upload_path'), 'system', path.basename(meta.config['brand:logo'])),
+					'brand:logo': path.join('/assets/uploads/system', path.basename(meta.config['brand:logo'])),
+					'brand:emailLogo': '/assets/uploads/system/site-logo-x50.png',
 				}, next);
 			},
 		], callback);

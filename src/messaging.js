@@ -2,7 +2,6 @@
 
 
 var async = require('async');
-var S = require('string');
 var validator = require('validator');
 
 var db = require('./database');
@@ -73,10 +72,14 @@ function canGet(hook, callerUid, uid, callback) {
 }
 
 Messaging.parse = function (message, fromuid, uid, roomId, isNew, callback) {
+	message = utils.decodeHTMLEntities(utils.stripHTMLTags(message));
+	message = validator.escape(String(message));
+
 	plugins.fireHook('filter:parse.raw', message, function (err, parsed) {
 		if (err) {
 			return callback(err);
 		}
+
 
 		var messageData = {
 			message: message,
@@ -153,23 +156,27 @@ Messaging.getRecentChats = function (callerUid, uid, start, stop, callback) {
 		},
 		function (results, next) {
 			results.roomData.forEach(function (room, index) {
-				room.users = results.users[index];
-				room.groupChat = room.hasOwnProperty('groupChat') ? room.groupChat : room.users.length > 2;
-				room.unread = results.unread[index];
-				room.teaser = results.teasers[index];
+				if (room) {
+					room.users = results.users[index];
+					room.groupChat = room.hasOwnProperty('groupChat') ? room.groupChat : room.users.length > 2;
+					room.unread = results.unread[index];
+					room.teaser = results.teasers[index];
 
-				room.users.forEach(function (userData) {
-					if (userData && parseInt(userData.uid, 10)) {
-						userData.status = user.getStatus(userData);
-					}
-				});
-				room.users = room.users.filter(function (user) {
-					return user && parseInt(user.uid, 10);
-				});
-				room.lastUser = room.users[0];
+					room.users.forEach(function (userData) {
+						if (userData && parseInt(userData.uid, 10)) {
+							userData.status = user.getStatus(userData);
+						}
+					});
+					room.users = room.users.filter(function (user) {
+						return user && parseInt(user.uid, 10);
+					});
+					room.lastUser = room.users[0];
 
-				room.usernames = Messaging.generateUsernames(room.users, uid);
+					room.usernames = Messaging.generateUsernames(room.users, uid);
+				}
 			});
+
+			results.roomData = results.roomData.filter(Boolean);
 
 			next(null, { rooms: results.roomData, nextStart: stop + 1 });
 		},
@@ -211,7 +218,7 @@ Messaging.getTeaser = function (uid, roomId, callback) {
 				return callback();
 			}
 			if (teaser.content) {
-				teaser.content = S(teaser.content).stripTags().decodeHTMLEntities().s;
+				teaser.content = utils.stripHTMLTags(utils.decodeHTMLEntities(teaser.content));
 				teaser.content = validator.escape(String(teaser.content));
 			}
 
