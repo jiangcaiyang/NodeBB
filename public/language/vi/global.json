@@ -53,6 +53,7 @@
     "topics": "Số Chủ đề",
     "posts": "Số bài viết",
     "best": "Hay nhất",
+    "votes": "Votes",
     "upvoters": "Tán thành",
     "upvoted": "Tán thành",
     "downvoters": "Phản đối",
@@ -104,6 +105,6 @@
     "cookies.accept": "Đã rõ!",
     "cookies.learn_more": "Xem thêm",
     "edited": "Đã cập nhật",
-    "disabled": "Disabled",
-    "select": "Select"
+    "disabled": "Bị khóa",
+    "select": "Chọn"
 }

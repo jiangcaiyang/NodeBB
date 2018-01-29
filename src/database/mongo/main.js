@@ -66,7 +66,7 @@ module.exports = function (db, module) {
 		if (!key) {
 			return callback();
 		}
-		module.getObjectField(key, 'value', callback);
+		module.getObjectField(key, 'data', callback);
 	};
 
 	module.set = function (key, value, callback) {
@@ -74,7 +74,7 @@ module.exports = function (db, module) {
 		if (!key) {
 			return callback();
 		}
-		var data = { value: value };
+		var data = { data: value };
 		module.setObject(key, data, callback);
 	};
 
@@ -83,8 +83,8 @@ module.exports = function (db, module) {
 		if (!key) {
 			return callback();
 		}
-		db.collection('objects').findAndModify({ _key: key }, {}, { $inc: { value: 1 } }, { new: true, upsert: true }, function (err, result) {
-			callback(err, result && result.value ? result.value.value : null);
+		db.collection('objects').findAndModify({ _key: key }, {}, { $inc: { data: 1 } }, { new: true, upsert: true }, function (err, result) {
+			callback(err, result && result.value ? result.value.data : null);
 		});
 	};
 
@@ -108,6 +108,7 @@ module.exports = function (db, module) {
 			if (!data) {
 				return callback(null, null);
 			}
+			delete data.expireAt;
 			var keys = Object.keys(data);
 			if (keys.length === 4 && data.hasOwnProperty('_key') && data.hasOwnProperty('score') && data.hasOwnProperty('value')) {
 				return callback(null, 'zset');
@@ -115,7 +116,7 @@ module.exports = function (db, module) {
 				return callback(null, 'set');
 			} else if (keys.length === 3 && data.hasOwnProperty('_key') && data.hasOwnProperty('array')) {
 				return callback(null, 'list');
-			} else if (keys.length === 3 && data.hasOwnProperty('_key') && data.hasOwnProperty('value')) {
+			} else if (keys.length === 3 && data.hasOwnProperty('_key') && data.hasOwnProperty('data')) {
 				return callback(null, 'string');
 			}
 			callback(null, 'hash');

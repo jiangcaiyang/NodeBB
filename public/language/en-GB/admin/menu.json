@@ -9,12 +9,15 @@
 
 	"section-manage": "Manage",
 	"manage/categories": "Categories",
+	"manage/privileges": "Privileges",
 	"manage/tags": "Tags",
 	"manage/users": "Users",
+	"manage/admins-mods": "Admins & Mods",
 	"manage/registration": "Registration Queue",
 	"manage/post-queue": "Post Queue",
 	"manage/groups": "Groups",
 	"manage/ip-blacklist": "IP Blacklist",
+	"manage/uploads": "Uploads",
 
 	"section-settings": "Settings",
 	"settings/general": "General",

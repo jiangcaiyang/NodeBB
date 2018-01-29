@@ -5,7 +5,7 @@ var fs = require('fs');
 var cproc = require('child_process');
 
 var packageFilePath = path.join(__dirname, '../../package.json');
-var packageDefaultFilePath = path.join(__dirname, '../../package.default.json');
+var packageDefaultFilePath = path.join(__dirname, '../../install/package.json');
 var modulesPath = path.join(__dirname, '../../node_modules');
 
 function updatePackageFile() {
@@ -29,14 +29,26 @@ function updatePackageFile() {
 
 exports.updatePackageFile = updatePackageFile;
 
-function npmInstallProduction() {
-	cproc.execSync('npm i --production', {
+function installAll() {
+	var prod = global.env !== 'development';
+	var command = 'npm install';
+	try {
+		fs.accessSync(path.join(modulesPath, 'nconf/package.json'), fs.constants.R_OK);
+		var packageManager = require('nconf').get('package_manager');
+		if (packageManager === 'yarn') {
+			command = 'yarn';
+		}
+	} catch (e) {
+		// ignore
+	}
+
+	cproc.execSync(command + (prod ? ' --production' : ''), {
 		cwd: path.join(__dirname, '../../'),
 		stdio: [0, 1, 2],
 	});
 }
 
-exports.npmInstallProduction = npmInstallProduction;
+exports.installAll = installAll;
 
 function preserveExtraneousPlugins() {
 	// Skip if `node_modules/` is not found or inaccessible
@@ -53,9 +65,12 @@ function preserveExtraneousPlugins() {
 	var packageContents = JSON.parse(fs.readFileSync(packageFilePath, 'utf8'));
 
 	var extraneous = packages
-		// only extraneous plugins (ones not in package.json)
+		// only extraneous plugins (ones not in package.json) which are not links
 		.filter(function (pkgName) {
-			return !packageContents.dependencies.hasOwnProperty(pkgName);
+			const extraneous = !packageContents.dependencies.hasOwnProperty(pkgName);
+			const isLink = fs.lstatSync(path.join(modulesPath, pkgName)).isSymbolicLink();
+
+			return extraneous && !isLink;
 		})
 		// reduce to a map of package names to package versions
 		.reduce(function (map, pkgName) {

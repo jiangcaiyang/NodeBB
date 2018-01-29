@@ -6,10 +6,13 @@ var jsesc = require('jsesc');
 
 var db = require('../database');
 var user = require('../user');
+var topics = require('../topics');
+var messaging = require('../messaging');
 var meta = require('../meta');
 var plugins = require('../plugins');
 var navigation = require('../navigation');
 var translator = require('../translator');
+var privileges = require('../privileges');
 var utils = require('../utils');
 
 var controllers = {
@@ -75,6 +78,9 @@ module.exports = function (middleware) {
 					isModerator: function (next) {
 						user.isModeratorOfAnyCategory(req.uid, next);
 					},
+					privileges: function (next) {
+						privileges.global.get(req.uid, next);
+					},
 					user: function (next) {
 						var userData = {
 							uid: 0,
@@ -109,10 +115,16 @@ module.exports = function (middleware) {
 							next(null, translated);
 						});
 					},
-					navigation: async.apply(navigation.get),
+					navigation: navigation.get,
 					tags: async.apply(meta.tags.parse, req, data, res.locals.metaTags, res.locals.linkTags),
 					banned: async.apply(user.isBanned, req.uid),
 					banReason: async.apply(user.getBannedReason, req.uid),
+
+					unreadTopicCount: async.apply(topics.getTotalUnread, req.uid),
+					unreadNewTopicCount: async.apply(topics.getTotalUnread, req.uid, 'new'),
+					unreadWatchedTopicCount: async.apply(topics.getTotalUnread, req.uid, 'watched'),
+					unreadChatCount: async.apply(messaging.getUnreadCount, req.uid),
+					unreadNotificationCount: async.apply(user.notifications.getUnreadCount, req.uid),
 				}, next);
 			},
 			function (results, next) {
@@ -124,6 +136,8 @@ module.exports = function (middleware) {
 				results.user.isAdmin = results.isAdmin;
 				results.user.isGlobalMod = results.isGlobalMod;
 				results.user.isMod = !!results.isModerator;
+				results.user.privileges = results.privileges;
+
 				results.user.uid = parseInt(results.user.uid, 10);
 				results.user.email = String(results.user.email);
 				results.user['email:confirmed'] = parseInt(results.user['email:confirmed'], 10) === 1;
@@ -131,13 +145,51 @@ module.exports = function (middleware) {
 
 				setBootswatchCSS(templateValues, res.locals.config);
 
+				var unreadCount = {
+					topic: results.unreadTopicCount || 0,
+					newTopic: results.unreadNewTopicCount || 0,
+					watchedTopic: results.unreadWatchedTopicCount || 0,
+					chat: results.unreadChatCount || 0,
+					notification: results.unreadNotificationCount || 0,
+				};
+				Object.keys(unreadCount).forEach(function (key) {
+					if (unreadCount[key] > 99) {
+						unreadCount[key] = '99+';
+					}
+				});
+
+				results.navigation = results.navigation.map(function (item) {
+					if (item.originalRoute === '/unread' && results.unreadTopicCount > 0) {
+						return Object.assign({}, item, {
+							content: unreadCount.topic,
+							iconClass: item.iconClass + ' unread-count',
+						});
+					}
+					if (item.originalRoute === '/unread/new' && results.unreadNewTopicCount > 0) {
+						return Object.assign({}, item, {
+							content: unreadCount.newTopic,
+							iconClass: item.iconClass + ' unread-count',
+						});
+					}
+					if (item.originalRoute === '/unread/watched' && results.unreadWatchedTopicCount > 0) {
+						return Object.assign({}, item, {
+							content: unreadCount.watchedTopic,
+							iconClass: item.iconClass + ' unread-count',
+						});
+					}
+
+					return item;
+				});
+
 				templateValues.browserTitle = results.browserTitle;
 				templateValues.navigation = results.navigation;
+				templateValues.unreadCount = unreadCount;
 				templateValues.metaTags = results.tags.meta;
 				templateValues.linkTags = results.tags.link;
 				templateValues.isAdmin = results.user.isAdmin;
 				templateValues.isGlobalMod = results.user.isGlobalMod;
 				templateValues.showModMenu = results.user.isAdmin || results.user.isGlobalMod || results.user.isMod;
+				templateValues.canChat = results.canChat && parseInt(meta.config.disableChat, 10) !== 1;
 				templateValues.user = results.user;
 				templateValues.userJSON = jsesc(JSON.stringify(results.user), { isScriptContext: true });
 				templateValues.useCustomCSS = parseInt(meta.config.useCustomCSS, 10) === 1 && meta.config.customCSS;

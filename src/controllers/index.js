@@ -11,6 +11,7 @@ var helpers = require('./helpers');
 
 var Controllers = module.exports;
 
+Controllers.ping = require('./ping');
 Controllers.home = require('./home');
 Controllers.topics = require('./topics');
 Controllers.posts = require('./posts');
@@ -19,6 +20,7 @@ Controllers.category = require('./category');
 Controllers.unread = require('./unread');
 Controllers.recent = require('./recent');
 Controllers.popular = require('./popular');
+Controllers.top = require('./top');
 Controllers.tags = require('./tags');
 Controllers.search = require('./search');
 Controllers.user = require('./user');
@@ -286,7 +288,7 @@ Controllers.outgoing = function (req, res, next) {
 	var allowedProtocols = ['http', 'https', 'ftp', 'ftps', 'mailto', 'news', 'irc', 'gopher', 'nntp', 'feed', 'telnet', 'mms', 'rtsp', 'svn', 'tel', 'fax', 'xmpp', 'webcal'];
 	var parsed = require('url').parse(url);
 
-	if (!url || !allowedProtocols.includes(parsed.protocol.slice(0, -1))) {
+	if (!url || !parsed.protocol || !allowedProtocols.includes(parsed.protocol.slice(0, -1))) {
 		return next();
 	}
 

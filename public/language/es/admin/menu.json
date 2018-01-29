@@ -9,8 +9,10 @@
 
 	"section-manage": "Administrar",
 	"manage/categories": "Categorias",
+	"manage/privileges": "Privileges",
 	"manage/tags": "Etiquetas",
 	"manage/users": "Usuarios",
+	"manage/admins-mods": "Admins & Mods",
 	"manage/registration": "Cola de Registro",
 	"manage/post-queue": "Post Queue",
 	"manage/groups": "Grupos",
@@ -39,7 +41,7 @@
 	"section-appearance": "Apariencia",
 	"appearance/themes": "Temas",
 	"appearance/skins": "Pieles",
-	"appearance/customise": "HTML & CSS personalizado",
+	"appearance/customise": "Custom Content (HTML/JS/CSS)",
 
 	"section-extend": "Extender",
 	"extend/plugins": "Extensiones",

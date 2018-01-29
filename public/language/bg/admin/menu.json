@@ -9,8 +9,10 @@
 
 	"section-manage": "Управление",
 	"manage/categories": "Категории",
+	"manage/privileges": "Правомощия",
 	"manage/tags": "Етикети",
 	"manage/users": "Потребители",
+	"manage/admins-mods": "Администратори и модератори",
 	"manage/registration": "Регистрационна опашка",
 	"manage/post-queue": "Опашка за публикации",
 	"manage/groups": "Групи",
@@ -39,7 +41,7 @@
 	"section-appearance": "Външен вид",
 	"appearance/themes": "Теми",
 	"appearance/skins": "Облици",
-	"appearance/customise": "Персонализиран HTML и CSS",
+	"appearance/customise": "Персонализирано съдържание (HTML/JS/CSS)",
 
 	"section-extend": "Разширяване",
 	"extend/plugins": "Добавки",

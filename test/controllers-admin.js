@@ -11,6 +11,7 @@ var topics = require('../src/topics');
 var user = require('../src/user');
 var groups = require('../src/groups');
 var helpers = require('./helpers');
+var meta = require('../src/meta');
 
 describe('Admin Controllers', function () {
 	var tid;
@@ -254,9 +255,46 @@ describe('Admin Controllers', function () {
 		});
 	});
 
-	it('should load /admin/users/csv', function (done) {
+	it('should load /admin/manage/admins-mods', function (done) {
+		request(nconf.get('url') + '/api/admin/manage/admins-mods', { jar: jar, json: true }, function (err, res, body) {
+			assert.ifError(err);
+			assert(body);
+			done();
+		});
+	});
+
+	it('should return 403 if no referer', function (done) {
 		request(nconf.get('url') + '/api/admin/users/csv', { jar: jar }, function (err, res, body) {
 			assert.ifError(err);
+			assert.equal(res.statusCode, 403);
+			assert.equal(body, '[[error:invalid-origin]]');
+			done();
+		});
+	});
+
+	it('should return 403 if referer is not /admin/users/csv', function (done) {
+		request(nconf.get('url') + '/api/admin/users/csv', {
+			jar: jar,
+			headers: {
+				referer: '/topic/1/test',
+			},
+		}, function (err, res, body) {
+			assert.ifError(err);
+			assert.equal(res.statusCode, 403);
+			assert.equal(body, '[[error:invalid-origin]]');
+			done();
+		});
+	});
+
+	it('should load /admin/users/csv', function (done) {
+		request(nconf.get('url') + '/api/admin/users/csv', {
+			jar: jar,
+			headers: {
+				referer: nconf.get('url') + '/admin/manage/users',
+			},
+		}, function (err, res, body) {
+			assert.ifError(err);
+			assert.equal(res.statusCode, 200);
 			assert(body);
 			done();
 		});
@@ -491,7 +529,6 @@ describe('Admin Controllers', function () {
 	});
 
 	it('should load /recent in maintenance mode', function (done) {
-		var meta = require('../src/meta');
 		meta.config.maintenanceMode = 1;
 		request(nconf.get('url') + '/api/recent', { jar: jar, json: true }, function (err, res, body) {
 			assert.ifError(err);
@@ -554,20 +591,21 @@ describe('Admin Controllers', function () {
 
 		it('should error with not enough reputation to flag', function (done) {
 			var socketFlags = require('../src/socket.io/flags');
-
+			var oldValue = meta.config['min:rep:flag'];
+			meta.config['min:rep:flag'] = 1000;
 			socketFlags.create({ uid: regularUid }, { id: pid, type: 'post', reason: 'spam' }, function (err) {
 				assert.equal(err.message, '[[error:not-enough-reputation-to-flag]]');
+				meta.config['min:rep:flag'] = oldValue;
 				done();
 			});
 		});
 
 		it('should return flag details', function (done) {
-			var meta = require('../src/meta');
 			var socketFlags = require('../src/socket.io/flags');
-			var oldValue = meta.config['privileges:flag'];
-			meta.config['privileges:flag'] = 0;
+			var oldValue = meta.config['min:rep:flag'];
+			meta.config['min:rep:flag'] = 0;
 			socketFlags.create({ uid: regularUid }, { id: pid, type: 'post', reason: 'spam' }, function (err, data) {
-				meta.config['privileges:flag'] = oldValue;
+				meta.config['min:rep:flag'] = oldValue;
 				assert.ifError(err);
 				request(nconf.get('url') + '/api/flags/' + data.flagId, { jar: moderatorJar, json: true }, function (err, res, body) {
 					assert.ifError(err);

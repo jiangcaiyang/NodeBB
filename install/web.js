@@ -5,10 +5,12 @@ var express = require('express');
 var bodyParser = require('body-parser');
 var fs = require('fs');
 var path = require('path');
+var childProcess = require('child_process');
 var less = require('less');
 var async = require('async');
 var uglify = require('uglify-js');
 var nconf = require('nconf');
+var _ = require('lodash');
 var Benchpress = require('benchpressjs');
 
 var app = express();
@@ -26,6 +28,7 @@ winston.add(winston.transports.File, {
 
 var web = {};
 var scripts = [
+	'node_modules/jquery/dist/jquery.js',
 	'public/vendor/xregexp/xregexp.js',
 	'public/vendor/xregexp/unicode/unicode-base.js',
 	'public/src/utils.js',
@@ -53,7 +56,7 @@ web.install = function (port) {
 		extended: true,
 	}));
 
-	async.parallel([compileLess, compileJS], function (err) {
+	async.parallel([compileLess, compileJS, copyCSS], function (err) {
 		if (err) {
 			winston.error(err);
 		}
@@ -73,14 +76,24 @@ function setupRoutes() {
 	app.get('/', welcome);
 	app.post('/', install);
 	app.post('/launch', launch);
+	app.get('/ping', ping);
+	app.get('/sping', ping);
+}
+
+function ping(req, res) {
+	res.status(200).send(req.path === '/sping' ? 'healthy' : '200');
 }
 
 function welcome(req, res) {
 	var dbs = ['redis', 'mongo'];
-	var databases = dbs.map(function (el) {
+	var databases = dbs.map(function (databaseName) {
+		var questions = require('../src/database/' + databaseName).questions.filter(function (question) {
+			return question && !question.hideOnWebInstall;
+		});
+
 		return {
-			name: el,
-			questions: require('../src/database/' + el).questions,
+			name: databaseName,
+			questions: questions,
 		};
 	});
 
@@ -97,14 +110,16 @@ function welcome(req, res) {
 }
 
 function install(req, res) {
+	req.setTimeout(0);
+	var setupEnvVars = _.assign({}, process.env);
 	for (var i in req.body) {
 		if (req.body.hasOwnProperty(i) && !process.env.hasOwnProperty(i)) {
-			process.env[i.replace(':', '__')] = req.body[i];
+			setupEnvVars[i.replace(':', '__')] = req.body[i];
 		}
 	}
 
 	var child = require('child_process').fork('app', ['--setup'], {
-		env: process.env,
+		env: setupEnvVars,
 	});
 
 	child.on('close', function (data) {
@@ -122,24 +137,25 @@ function launch(req, res) {
 	res.json({});
 	server.close();
 
-	var child = require('child_process').spawn('node', ['loader.js'], {
+	var child = childProcess.spawn('node', ['loader.js'], {
 		detached: true,
 		stdio: ['ignore', 'ignore', 'ignore'],
 	});
 
-	process.stdout.write('\nStarting NodeBB\n');
-	process.stdout.write('    "./nodebb stop" to stop the NodeBB server\n');
-	process.stdout.write('    "./nodebb log" to view server output\n');
-	process.stdout.write('    "./nodebb restart" to restart NodeBB\n');
+	console.log('\nStarting NodeBB');
+	console.log('    "./nodebb stop" to stop the NodeBB server');
+	console.log('    "./nodebb log" to view server output');
+	console.log('    "./nodebb restart" to restart NodeBB');
 
-	async.parallel([
-		function (next) {
-			fs.unlink(path.join(__dirname, '../public/installer.css'), next);
-		},
-		function (next) {
-			fs.unlink(path.join(__dirname, '../public/installer.min.js'), next);
-		},
-	], function (err) {
+	var filesToDelete = [
+		'installer.css',
+		'installer.min.js',
+		'bootstrap.min.css',
+	];
+
+	async.each(filesToDelete, function (filename, next) {
+		fs.unlink(path.join(__dirname, '../public', filename), next);
+	}, function (err) {
 		if (err) {
 			winston.warn('Unable to remove installer files');
 		}
@@ -192,6 +208,17 @@ function compileJS(callback) {
 			callback(e);
 		}
 	});
+}
+
+function copyCSS(next) {
+	async.waterfall([
+		function (next) {
+			fs.readFile(path.join(__dirname, '../node_modules/bootstrap/dist/css/bootstrap.min.css'), 'utf8', next);
+		},
+		function (src, next) {
+			fs.writeFile(path.join(__dirname, '../public/bootstrap.min.css'), src, next);
+		},
+	], next);
 }
 
 module.exports = web;

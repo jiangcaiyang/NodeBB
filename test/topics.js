@@ -1274,9 +1274,9 @@ describe('Topic\'s', function () {
 				assert.equal(data.matchCount, 3);
 				assert.equal(data.pageCount, 1);
 				var tagData = [
-					{ value: 'nodebb', color: '', bgColor: '', score: 3 },
-					{ value: 'nodejs', color: '', bgColor: '', score: 1 },
-					{ value: 'nosql', color: '', bgColor: '', score: 1 },
+					{ value: 'nodebb', valueEscaped: 'nodebb', color: '', bgColor: '', score: 3 },
+					{ value: 'nodejs', valueEscaped: 'nodejs', color: '', bgColor: '', score: 1 },
+					{ value: 'nosql', valueEscaped: 'nosql', color: '', bgColor: '', score: 1 },
 				];
 				assert.deepEqual(data.tags, tagData);
 
@@ -1350,28 +1350,57 @@ describe('Topic\'s', function () {
 			});
 		});
 
-		it('should error if data.tag is invalid', function (done) {
+		it('should error if data is not an array', function (done) {
 			socketAdmin.tags.update({ uid: adminUid }, {
 				bgColor: '#ff0000',
 				color: '#00ff00',
 			}, function (err) {
-				assert.equal(err.message, '[[error:invalid-tag]]');
+				assert.equal(err.message, '[[error:invalid-data]]');
 				done();
 			});
 		});
 
 		it('should update tag', function (done) {
-			socketAdmin.tags.update({ uid: adminUid }, {
-				tag: 'emptytag',
+			socketAdmin.tags.update({ uid: adminUid }, [{
+				value: 'emptytag',
 				bgColor: '#ff0000',
 				color: '#00ff00',
-			}, function (err) {
+			}], function (err) {
 				assert.ifError(err);
 				db.getObject('tag:emptytag', function (err, data) {
 					assert.ifError(err);
 					assert.equal(data.bgColor, '#ff0000');
 					assert.equal(data.color, '#00ff00');
 					done();
+				});
+			});
+		});
+
+		it('should rename tags', function (done) {
+			async.parallel({
+				topic1: function (next) {
+					topics.post({ uid: adminUid, tags: ['plugins'], title: 'topic tagged with plugins', content: 'topic 1 content', cid: topic.categoryId }, next);
+				},
+				topic2: function (next) {
+					topics.post({ uid: adminUid, tags: ['plugin'], title: 'topic tagged with plugin', content: 'topic 2 content', cid: topic.categoryId }, next);
+				},
+			}, function (err, result) {
+				assert.ifError(err);
+				socketAdmin.tags.rename({ uid: adminUid }, [{
+					value: 'plugin',
+					newName: 'plugins',
+				}], function (err) {
+					assert.ifError(err);
+					topics.getTagTids('plugins', 0, -1, function (err, tids) {
+						assert.ifError(err);
+						assert.equal(tids.length, 2);
+						topics.getTopicTags(result.topic2.topicData.tid, function (err, tags) {
+							assert.ifError(err);
+							assert.equal(tags.length, 1);
+							assert.equal(tags[0], 'plugins');
+							done();
+						});
+					});
 				});
 			});
 		});
@@ -1697,6 +1726,92 @@ describe('Topic\'s', function () {
 					});
 				});
 			});
+		});
+	});
+
+	describe('topic merge', function () {
+		var uid;
+		var topic1Data;
+		var topic2Data;
+
+		before(function (done) {
+			async.waterfall([
+				function (next) {
+					User.create({ username: 'mergevictim' }, next);
+				},
+				function (_uid, next) {
+					uid = _uid;
+					topics.post({ uid: uid, cid: categoryObj.cid, title: 'topic 1', content: 'topic 1 OP' }, next);
+				},
+				function (result, next) {
+					topic1Data = result.topicData;
+					topics.post({ uid: uid, cid: categoryObj.cid, title: 'topic 2', content: 'topic 2 OP' }, next);
+				},
+				function (result, next) {
+					topic2Data = result.topicData;
+					topics.reply({ uid: uid, content: 'topic 1 reply', tid: topic1Data.tid }, next);
+				},
+				function (postData, next) {
+					topics.reply({ uid: uid, content: 'topic 2 reply', tid: topic2Data.tid }, next);
+				},
+			], done);
+		});
+
+		it('should error if data is not an array', function (done) {
+			socketTopics.merge({ uid: 0 }, null, function (err) {
+				assert.equal(err.message, '[[error:invalid-data]]');
+				done();
+			});
+		});
+
+		it('should error if user does not have privileges', function (done) {
+			socketTopics.merge({ uid: 0 }, [topic2Data.tid, topic1Data.tid], function (err) {
+				assert.equal(err.message, '[[error:no-privileges]]');
+				done();
+			});
+		});
+
+		it('should merge 2 topics', function (done) {
+			async.waterfall([
+				function (next) {
+					socketTopics.merge({ uid: adminUid }, [topic2Data.tid, topic1Data.tid], next);
+				},
+				function (next) {
+					async.parallel({
+						topic1: function (next) {
+							async.waterfall([
+								function (next) {
+									topics.getTopicData(topic1Data.tid, next);
+								},
+								function (topicData, next) {
+									topics.getTopicWithPosts(topicData, 'tid:' + topicData.tid + ':posts', adminUid, 0, 19, false, next);
+								},
+							], next);
+						},
+						topic2: function (next) {
+							async.waterfall([
+								function (next) {
+									topics.getTopicData(topic2Data.tid, next);
+								},
+								function (topicData, next) {
+									topics.getTopicWithPosts(topicData, 'tid:' + topicData.tid + ':posts', adminUid, 0, 19, false, next);
+								},
+							], next);
+						},
+					}, next);
+				},
+				function (results, next) {
+					assert.equal(results.topic1.posts.length, 4);
+					assert.equal(results.topic2.posts.length, 0);
+					assert.equal(results.topic2.deleted, true);
+
+					assert.equal(results.topic1.posts[0].content, 'topic 1 OP');
+					assert.equal(results.topic1.posts[1].content, 'topic 2 OP');
+					assert.equal(results.topic1.posts[2].content, 'topic 1 reply');
+					assert.equal(results.topic1.posts[3].content, 'topic 2 reply');
+					next();
+				},
+			], done);
 		});
 	});
 });

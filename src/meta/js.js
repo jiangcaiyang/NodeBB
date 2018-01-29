@@ -14,6 +14,7 @@ var JS = module.exports;
 
 JS.scripts = {
 	base: [
+		'node_modules/promise-polyfill/dist/polyfill.js',
 		'node_modules/jquery/dist/jquery.js',
 		'node_modules/socket.io-client/dist/socket.io.js',
 		'public/vendor/jquery/timeago/jquery.timeago.js',
@@ -36,7 +37,6 @@ JS.scripts = {
 		'public/src/ajaxify.js',
 		'public/src/overrides.js',
 		'public/src/widgets.js',
-		'node_modules/promise-polyfill/promise.js',
 	],
 
 	// files listed below are only available client-side, or are bundled in to reduce # of network requests on cold load
@@ -49,6 +49,7 @@ JS.scripts = {
 		'public/src/client/unread.js',
 		'public/src/client/topic.js',
 		'public/src/client/topic/events.js',
+		'public/src/client/topic/merge.js',
 		'public/src/client/topic/fork.js',
 		'public/src/client/topic/move.js',
 		'public/src/client/topic/posts.js',
@@ -74,6 +75,19 @@ JS.scripts = {
 		'public/src/modules/helpers.js',
 		'public/src/modules/flags.js',
 		'public/src/modules/storage.js',
+	],
+
+	admin: [
+		'node_modules/material-design-lite/material.js',
+		'public/vendor/jquery/sortable/Sortable.js',
+		'public/vendor/colorpicker/colorpicker.js',
+		'public/src/admin/admin.js',
+		'public/vendor/semver/semver.browser.js',
+		'public/vendor/jquery/serializeObject/jquery.ba-serializeobject.min.js',
+		'public/vendor/jquery/deserialize/jquery.deserialize.min.js',
+		'public/vendor/snackbar/snackbar.min.js',
+		'public/vendor/slideout/slideout.min.js',
+		'public/vendor/nprogress.min.js',
 	],
 
 	// modules listed below are built (/src/modules) so they can be defined anonymously
@@ -299,13 +313,15 @@ function getBundleScriptList(target, callback) {
 			return callback(err);
 		}
 
-		var scripts = JS.scripts.base.concat(pluginScripts);
+		var scripts = JS.scripts.base;
 
 		if (target === 'client' && global.env !== 'development') {
 			scripts = scripts.concat(JS.scripts.rjs);
+		} else if (target === 'acp') {
+			scripts = scripts.concat(JS.scripts.admin);
 		}
 
-		scripts = scripts.map(function (script) {
+		scripts = scripts.concat(pluginScripts).map(function (script) {
 			var srcPath = path.resolve(basePath, script).replace(/\\/g, '/');
 			return {
 				srcPath: srcPath,
@@ -326,6 +342,11 @@ JS.buildBundle = function (target, fork, callback) {
 	async.waterfall([
 		function (next) {
 			getBundleScriptList(target, next);
+		},
+		function (files, next) {
+			mkdirp(path.join(__dirname, '../../build/public'), function (err) {
+				next(err, files);
+			});
 		},
 		function (files, next) {
 			var minify = global.env !== 'development';

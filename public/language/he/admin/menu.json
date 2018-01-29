@@ -9,8 +9,10 @@
 
 	"section-manage": "Manage",
 	"manage/categories": "קטגוריות",
+	"manage/privileges": "Privileges",
 	"manage/tags": "תגיות",
 	"manage/users": "משתמשים",
+	"manage/admins-mods": "Admins & Mods",
 	"manage/registration": "Registration Queue",
 	"manage/post-queue": "Post Queue",
 	"manage/groups": "Groups",
@@ -39,7 +41,7 @@
 	"section-appearance": "Appearance",
 	"appearance/themes": "Themes",
 	"appearance/skins": "Skins",
-	"appearance/customise": "Custom HTML & CSS",
+	"appearance/customise": "Custom Content (HTML/JS/CSS)",
 
 	"section-extend": "Extend",
 	"extend/plugins": "Plugins",

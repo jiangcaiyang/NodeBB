@@ -99,13 +99,14 @@ middleware.routeTouchIcon = function (req, res) {
 	if (meta.config['brand:touchIcon'] && validator.isURL(meta.config['brand:touchIcon'])) {
 		return res.redirect(meta.config['brand:touchIcon']);
 	}
-	var iconPath = '../../public';
+	var iconPath = '';
 	if (meta.config['brand:touchIcon']) {
-		iconPath += meta.config['brand:touchIcon'].replace(/assets\/uploads/, 'uploads');
+		iconPath = path.join(nconf.get('upload_path'), meta.config['brand:touchIcon'].replace(/assets\/uploads/, ''));
 	} else {
-		iconPath += '/logo.png';
+		iconPath = path.join(nconf.get('base_dir'), 'public/logo.png');
 	}
-	return res.sendFile(path.join(__dirname, iconPath), {
+
+	return res.sendFile(iconPath, {
 		maxAge: req.app.enabled('cache') ? 5184000000 : 0,
 	});
 };
@@ -203,10 +204,17 @@ middleware.delayLoading = function (req, res, next) {
 };
 
 var viewsDir = nconf.get('views_dir');
+var workingCache = {};
+
 middleware.templatesOnDemand = function (req, res, next) {
 	var filePath = req.filePath || path.join(viewsDir, req.path);
 	if (!filePath.endsWith('.js')) {
 		return next();
+	}
+
+	if (workingCache[filePath]) {
+		workingCache[filePath].push(next);
+		return;
 	}
 
 	async.waterfall([
@@ -218,6 +226,14 @@ middleware.templatesOnDemand = function (req, res, next) {
 				return next();
 			}
 
+			// need to check here again
+			// because compilation could have started since last check
+			if (workingCache[filePath]) {
+				workingCache[filePath].push(next);
+				return;
+			}
+
+			workingCache[filePath] = [next];
 			fs.readFile(filePath.replace(/\.js$/, '.tpl'), 'utf8', cb);
 		},
 		function (source, cb) {
@@ -229,5 +245,12 @@ middleware.templatesOnDemand = function (req, res, next) {
 		function (compiled, cb) {
 			fs.writeFile(filePath, compiled, cb);
 		},
-	], next);
+	], function (err) {
+		var arr = workingCache[filePath];
+		workingCache[filePath] = null;
+
+		arr.forEach(function (callback) {
+			callback(err);
+		});
+	});
 };
