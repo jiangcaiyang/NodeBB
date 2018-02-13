@@ -33,6 +33,12 @@ Upgrade.getAll = function (callback) {
 				versionA = path.dirname(a).split('/').pop();
 				versionB = path.dirname(b).split('/').pop();
 
+                if ( versionA === "upgrades" ||
+                     versionB === "upgrades" )
+                {
+                    return true;
+                }
+
 				return semver.compare(versionA, versionB);
 			}));
 		},
