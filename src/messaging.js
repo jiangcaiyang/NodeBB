@@ -56,6 +56,16 @@ Messaging.getMessages = function (params, callback) {
 			messageData.forEach(function (messageData) {
 				messageData.index = indices[messageData.messageId.toString()];
 			});
+
+			// Filter out deleted messages unless you're the sender of said message
+			messageData = messageData.filter(function (messageData) {
+				if (messageData.deleted && parseInt(messageData.fromuid, 10) !== parseInt(params.uid, 10)) {
+					return false;
+				}
+
+				return true;
+			});
+
 			next(null, messageData);
 		},
 	], callback);
@@ -72,9 +82,6 @@ function canGet(hook, callerUid, uid, callback) {
 }
 
 Messaging.parse = function (message, fromuid, uid, roomId, isNew, callback) {
-	message = utils.decodeHTMLEntities(utils.stripHTMLTags(message));
-	message = validator.escape(String(message));
-
 	plugins.fireHook('filter:parse.raw', message, function (err, parsed) {
 		if (err) {
 			return callback(err);
@@ -265,11 +272,12 @@ Messaging.canMessageUser = function (uid, toUid, callback) {
 			async.parallel({
 				settings: async.apply(user.getSettings, toUid),
 				isAdmin: async.apply(user.isAdministrator, uid),
+				isModerator: async.apply(user.isModeratorOfAnyCategory, uid),
 				isFollowing: async.apply(user.isFollowing, toUid, uid),
 			}, next);
 		},
 		function (results, next) {
-			if (results.settings.restrictChat && !results.isAdmin && !results.isFollowing) {
+			if (results.settings.restrictChat && !results.isAdmin && !results.isModerator && !results.isFollowing) {
 				return next(new Error('[[error:chat-restricted]]'));
 			}
 
