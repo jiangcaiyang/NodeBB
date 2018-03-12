@@ -9,6 +9,7 @@ var plugins = require('../plugins');
 var translator = require('../translator');
 var db = require('../database');
 var apiController = require('../controllers/api');
+var meta = require('../meta');
 
 var widgets = module.exports;
 
@@ -61,15 +62,17 @@ widgets.render = function (uid, options, callback) {
 };
 
 function renderWidget(widget, uid, options, callback) {
+	var userLang;
 	async.waterfall([
 		function (next) {
 			if (options.res.locals.isAPI) {
 				apiController.loadConfig(options.req, next);
 			} else {
-				next(null, options.res.locals.config);
+				next(null, options.res.locals.config || {});
 			}
 		},
 		function (config, next) {
+			userLang = config.userLang || meta.config.defaultLang || 'en-GB';
 			var templateData = _.assign({ }, options.templateData, { config: config });
 			plugins.fireHook('filter:widget.render:' + widget.widget, {
 				uid: uid,
@@ -101,7 +104,7 @@ function renderWidget(widget, uid, options, callback) {
 			}
 		},
 		function (html, next) {
-			translator.translate(html, function (translatedHtml) {
+			translator.translate(html, userLang, function (translatedHtml) {
 				next(null, { html: translatedHtml });
 			});
 		},

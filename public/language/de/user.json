@@ -1,6 +1,7 @@
 {
     "banned": "Gesperrt",
     "offline": "offline",
+    "deleted": "Gelöscht",
     "username": "Benutzername",
     "joindate": "Registriert am",
     "postcount": "Beiträge",
@@ -95,7 +96,7 @@
     "topics_per_page": "Themen pro Seite",
     "posts_per_page": "Beiträge pro Seite",
     "max_items_per_page": "Maximal %1",
-    "acp_language": "Admin Page Language",
+    "acp_language": "Sprache der Admin Seiten",
     "notification_sounds": "Ton abspielen, wenn du eine Benachrichtigung erhältst",
     "notifications_and_sounds": "Benachrichtigungen & Klänge",
     "incoming-message-sound": "Ton bei empfangener Nachricht",

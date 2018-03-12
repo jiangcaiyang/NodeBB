@@ -30,11 +30,12 @@
     "locked": "已锁定",
     "pinned": "已固定",
     "moved": "已移动",
-    "copy-ip": "Copy IP",
-    "ban-ip": "Ban IP",
+    "copy-ip": "复制IP",
+    "ban-ip": "禁止IP",
+    "view-history": "Edit History",
     "bookmark_instructions": "点击阅读本主题帖中的最新回复",
     "flag_title": "举报此帖",
-    "merged_message": "This topic has been merged into <a href=\"/topic/%1\">%2</a>",
+    "merged_message": "此主题已并入<a href=\"/topic/%1\">%2</a>",
     "deleted_message": "此主题已被删除。只有拥有主题管理权限的用户可以查看。",
     "following_topic.message": "当有人回复此主题时，您会收到通知。",
     "not_following_topic.message": "您将在未读主题列表中看到这个主题，但您不会在帖子被回复时收到通知。",
@@ -121,5 +122,8 @@
     "stale.warning": "您回复的主题已经非常老了。开个新帖，然后在新帖中引用这个老帖的内容，可以吗？",
     "stale.create": "创建新主题",
     "stale.reply_anyway": "仍然回复此帖",
-    "link_back": "回复: [%1](%2)"
+    "link_back": "回复: [%1](%2)",
+    "diffs.title": "历史提交记录",
+    "diffs.description": "该帖已经重新修改。点击修改查看某个时间点提交的内容。",
+    "diffs.no-revisions-description": "该贴已重新修改"
 }
