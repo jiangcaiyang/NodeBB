@@ -122,11 +122,16 @@ function install(req, res) {
 		setupEnvVars[parentKey + '__' + key] = setupEnvVars[parentKey][key];
 	};
 	for (var j in setupEnvVars) {
-		if (setupEnvVars.hasOwnProperty(j) && typeof setupEnvVars[j] === 'object' && setupEnvVars[j] !== null) {
+		if (setupEnvVars.hasOwnProperty(j) && typeof setupEnvVars[j] === 'object' && setupEnvVars[j] !== null && !Array.isArray(setupEnvVars[j])) {
 			Object.keys(setupEnvVars[j]).forEach(pushToRoot.bind(null, j));
 			delete setupEnvVars[j];
+		} else if (Array.isArray(setupEnvVars[j])) {
+			setupEnvVars[j] = JSON.stringify(setupEnvVars[j]);
 		}
 	}
+
+	winston.info('Starting setup process');
+	winston.info(setupEnvVars);
 
 	var child = require('child_process').fork('app', ['--setup'], {
 		env: setupEnvVars,
@@ -242,13 +247,14 @@ function copyCSS(next) {
 }
 
 function loadDefaults(next) {
-	var setupDefaultsPath = path.join(__dirname, './data/setup.json');
+	var setupDefaultsPath = path.join(__dirname, '../setup.json');
 	fs.access(setupDefaultsPath, fs.constants.F_OK | fs.constants.R_OK, function (err) {
 		if (err) {
 			// setup.json not found or inaccessible, proceed with no defaults
 			return setImmediate(next);
 		}
 
+		winston.info('[installer] Found setup.json, populating default values');
 		nconf.file({
 			file: setupDefaultsPath,
 		});
