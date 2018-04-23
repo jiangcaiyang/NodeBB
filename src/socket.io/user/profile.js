@@ -90,7 +90,7 @@ module.exports = function (SocketUser) {
 					return next(new Error('[[error:no-privileges]]'));
 				}
 
-				if ((!results.isAdmin || !results.isGlobalMod) && !isSelf) {
+				if (!isSelf && !(results.isAdmin || results.isGlobalMod)) {
 					return next(new Error('[[error:no-privileges]]'));
 				}
 
@@ -102,6 +102,13 @@ module.exports = function (SocketUser) {
 			},
 		], callback);
 	}
+
+	SocketUser.checkPassword = function (socket, data, callback) {
+		isPrivilegedOrSelfAndPasswordMatch(socket.uid, data, function (err) {
+			// Return a bool (without delayed response to prevent brute-force checking of password validity)
+			setTimeout(callback.bind(null, null, !err), 1000);
+		});
+	};
 
 	SocketUser.changePassword = function (socket, data, callback) {
 		if (!socket.uid) {

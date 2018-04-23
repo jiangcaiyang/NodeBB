@@ -61,6 +61,8 @@ apiController.loadConfig = function (req, callback) {
 	config.searchEnabled = plugins.hasListeners('filter:search.query');
 	config.bootswatchSkin = meta.config.bootswatchSkin || 'noskin';
 	config.defaultBootswatchSkin = meta.config.bootswatchSkin || 'noskin';
+	config.enablePostHistory = parseInt(meta.config.enablePostHistory || 1, 10) === 1;
+	config.notificationAlertTimeout = parseInt(meta.config.notificationAlertTimeout, 10) || 5000;
 
 	if (config.useOutgoingLinksPage) {
 		config.outgoingLinksWhitelist = meta.config['outgoingLinks:whitelist'];
