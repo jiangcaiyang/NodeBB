@@ -215,9 +215,24 @@ module.exports = function (middleware) {
 			return next();
 		}
 		if (!req.path.endsWith('/register/complete')) {
+			// Append user data if present
+			req.session.registration.uid = req.uid;
+
 			controllers.helpers.redirect(res, '/register/complete');
 		} else {
 			return next();
 		}
+	};
+
+	middleware.handleBlocking = function (req, res, next) {
+		user.blocks.is(res.locals.uid, req.uid, function (err, blocked) {
+			if (err) {
+				return next(err);
+			} else if (blocked) {
+				res.status(404).render('404', { title: '[[global:404.title]]' });
+			} else {
+				return next();
+			}
+		});
 	};
 };

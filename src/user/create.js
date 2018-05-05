@@ -46,6 +46,8 @@ module.exports = function (User) {
 					lastposttime: 0,
 					banned: 0,
 					status: 'online',
+					gdpr_consent: data.gdpr_consent === true ? 1 : 0,
+					acceptTos: data.acceptTos === true ? 1 : 0,
 				};
 
 				User.uniqueUsername(userData, next);
