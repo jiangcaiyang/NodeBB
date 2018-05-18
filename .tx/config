@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 [main]
 host = https://www.transifex.com
 
@@ -3233,4 +3234,3 @@ trans.vi = public/language/vi/admin/settings/web-crawler.json
 trans.zh_CN = public/language/zh-CN/admin/settings/web-crawler.json
 trans.zh_TW = public/language/zh-TW/admin/settings/web-crawler.json
 type = KEYVALUEJSON
-
