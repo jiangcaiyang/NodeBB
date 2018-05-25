@@ -1434,6 +1434,7 @@ describe('User', function () {
 				password: '123456',
 				'password-confirm': '123456',
 				email: '<script>alert("ok")<script>reject@me.com',
+				gdpr_consent: true,
 			}, function (err) {
 				assert.ifError(err);
 				helpers.loginUser('admin', '123456', function (err, jar) {
@@ -1465,6 +1466,7 @@ describe('User', function () {
 				password: '123456',
 				'password-confirm': '123456',
 				email: 'accept@me.com',
+				gdpr_consent: true,
 			}, function (err) {
 				assert.ifError(err);
 				socketAdmin.user.acceptRegistration({ uid: adminUid }, { username: 'acceptme' }, function (err, uid) {
@@ -1749,6 +1751,160 @@ describe('User', function () {
 						assert(!body.posts[0].user.hasOwnProperty('fullname'));
 						done();
 					});
+				});
+			});
+		});
+	});
+
+	describe('user blocking methods', function (done) {
+		let blockeeUid;
+		before(function (done) {
+			User.create({
+				username: 'blockee',
+				email: 'blockee@example.org',
+				fullname: 'Block me',
+			}, function (err, uid) {
+				blockeeUid = uid;
+				done(err);
+			});
+		});
+
+		describe('.add()', function () {
+			it('should block a uid', function (done) {
+				User.blocks.add(blockeeUid, 1, function (err, blocked_uids) {
+					assert.ifError(err);
+					assert.strictEqual(Array.isArray(blocked_uids), true);
+					assert.strictEqual(blocked_uids.length, 1);
+					assert.strictEqual(blocked_uids.includes(blockeeUid), true);
+					done();
+				});
+			});
+
+			it('should automatically increment corresponding user field', function (done) {
+				db.getObjectField('user:1', 'blocksCount', function (err, count) {
+					assert.ifError(err);
+					assert.strictEqual(parseInt(count, 10), 1);
+					done();
+				});
+			});
+
+			it('should error if you try to block the same uid again', function (done) {
+				User.blocks.add(blockeeUid, 1, function (err) {
+					assert.equal(err.message, '[[error:already-blocked]]');
+					done();
+				});
+			});
+		});
+
+		describe('.remove()', function () {
+			it('should unblock a uid', function (done) {
+				User.blocks.remove(blockeeUid, 1, function (err, blocked_uids) {
+					assert.ifError(err);
+					assert.strictEqual(Array.isArray(blocked_uids), true);
+					assert.strictEqual(blocked_uids.length, 0);
+					done();
+				});
+			});
+
+			it('should automatically decrement corresponding user field', function (done) {
+				db.getObjectField('user:1', 'blocksCount', function (err, count) {
+					assert.ifError(err);
+					assert.strictEqual(parseInt(count, 10), 0);
+					done();
+				});
+			});
+
+			it('should error if you try to unblock the same uid again', function (done) {
+				User.blocks.remove(blockeeUid, 1, function (err) {
+					assert.equal(err.message, '[[error:already-unblocked]]');
+					done();
+				});
+			});
+		});
+
+		describe('.is()', function () {
+			before(function (done) {
+				User.blocks.add(blockeeUid, 1, done);
+			});
+
+			it('should return a Boolean with blocked status for the queried uid', function (done) {
+				User.blocks.is(blockeeUid, 1, function (err, blocked) {
+					assert.ifError(err);
+					assert.strictEqual(blocked, true);
+					done();
+				});
+			});
+		});
+
+		describe('.list()', function () {
+			it('should return a list of blocked uids', function (done) {
+				User.blocks.list(1, function (err, blocked_uids) {
+					assert.ifError(err);
+					assert.strictEqual(Array.isArray(blocked_uids), true);
+					assert.strictEqual(blocked_uids.length, 1);
+					assert.strictEqual(blocked_uids.includes(blockeeUid), true);
+					done();
+				});
+			});
+		});
+
+		describe('.filter()', function () {
+			it('should remove entries by blocked uids and return filtered set', function (done) {
+				User.blocks.filter(1, [{
+					foo: 'foo',
+					uid: blockeeUid,
+				}, {
+					foo: 'bar',
+					uid: 1,
+				}, {
+					foo: 'baz',
+					uid: blockeeUid,
+				}], function (err, filtered) {
+					assert.ifError(err);
+					assert.strictEqual(Array.isArray(filtered), true);
+					assert.strictEqual(filtered.length, 1);
+					assert.equal(filtered[0].uid, 1);
+					done();
+				});
+			});
+
+			it('should allow property argument to be passed in to customise checked property', function (done) {
+				User.blocks.filter(1, 'fromuid', [{
+					foo: 'foo',
+					fromuid: blockeeUid,
+				}, {
+					foo: 'bar',
+					fromuid: 1,
+				}, {
+					foo: 'baz',
+					fromuid: blockeeUid,
+				}], function (err, filtered) {
+					assert.ifError(err);
+					assert.strictEqual(Array.isArray(filtered), true);
+					assert.strictEqual(filtered.length, 1);
+					assert.equal(filtered[0].fromuid, 1);
+					done();
+				});
+			});
+
+			it('should not process invalid sets', function (done) {
+				User.blocks.filter(1, [{ foo: 'foo' }, { foo: 'bar' }, { foo: 'baz' }], function (err, filtered) {
+					assert.ifError(err);
+					assert.strictEqual(Array.isArray(filtered), true);
+					assert.strictEqual(filtered.length, 3);
+					filtered.forEach(function (obj) {
+						assert.strictEqual(obj.hasOwnProperty('foo'), true);
+					});
+					done();
+				});
+			});
+
+			it('should process plain sets that just contain uids', function (done) {
+				User.blocks.filter(1, [1, blockeeUid], function (err, filtered) {
+					assert.ifError(err);
+					assert.strictEqual(filtered.length, 1);
+					assert.strictEqual(filtered[0], 1);
+					done();
 				});
 			});
 		});

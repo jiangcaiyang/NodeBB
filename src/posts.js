@@ -26,6 +26,7 @@ require('./posts/votes')(Posts);
 require('./posts/bookmarks')(Posts);
 require('./posts/queue')(Posts);
 require('./posts/diffs')(Posts);
+require('./posts/uploads')(Posts);
 
 Posts.exists = function (pid, callback) {
 	db.isSortedSetMember('posts:pid', pid, callback);
@@ -63,6 +64,7 @@ Posts.getPostsByPids = function (pids, uid, callback) {
 				Posts.parsePost(post, next);
 			}, next);
 		},
+		async.apply(user.blocks.filter, uid),
 		function (posts, next) {
 			plugins.fireHook('filter:post.getPosts', { posts: posts, uid: uid }, next);
 		},

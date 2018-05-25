@@ -18,6 +18,7 @@
     "invalid-username-or-password": "אנא הגדר שם משתמש וסיסמה",
     "invalid-search-term": "מילת חיפוש לא תקינה",
     "invalid-url": "שגיאה בכתובת URL",
+    "local-login-disabled": "Local login system has been disabled for non-privileged accounts.",
     "csrf-invalid": "אין באפשרותנו לחבר אותך למערכת, מכיוון שעבר זמן רב מידי. אנא נסה שנית.",
     "invalid-pagination-value": "ערך דף לא חוקי, חייב להיות לפחות %1 ולא מעל %2",
     "username-taken": "שם משתמש תפוס",
@@ -145,5 +146,7 @@
     "invalid-session": "מושב לא תואם",
     "invalid-session-text": "נראה שסשן ההתחברות שלך כבר לא פעיל. אנא טען מחדש את העמוד.",
     "no-topics-selected": "לא נבחרו נושאים!",
-    "cant-move-to-same-topic": "Can't move post to same topic!"
+    "cant-move-to-same-topic": "Can't move post to same topic!",
+    "cannot-block-self": "You cannot block yourself!",
+    "cannot-block-privileged": "You cannot block administrators or global moderators"
 }

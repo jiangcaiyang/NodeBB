@@ -19,5 +19,8 @@
     "terms_of_use_error": "Musisz zaakceptować warunki korzystania z serwisu",
     "registration-added-to-queue": "Twoja rejestracja została dodana do kolejki oczekujących na akceptację. Otrzymasz e-mail, kiedy zostanie zatwierdzona przez administratora.",
     "interstitial.intro": "Do utworzenia Twojego konta potrzebne są dodatkowe informacje.",
-    "interstitial.errors-found": "Nie mogliśmy ukończyć procesu rejestracji:"
+    "interstitial.errors-found": "Nie mogliśmy ukończyć procesu rejestracji:",
+    "gdpr_agree_data": "Wyrażam zgodę na zbieranie i przetwarzanie moich danych przez tę stronę.",
+    "gdpr_agree_email": "Wyrażam zgodę na otrzymywanie e-maili z podsumowaniami i powiadomieniami od tej strony.",
+    "gdpr_consent_denied": "Musisz wyrazić zgodę na zbieranie/przetwarzanie Twoich danych przez tę stronę oraz na otrzymywanie e-maili."
 }

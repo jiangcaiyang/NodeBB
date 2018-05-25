@@ -18,6 +18,7 @@
     "invalid-username-or-password": "Bitte gib sowohl einen Benutzernamen als auch ein Passwort an",
     "invalid-search-term": "Ungültige Suchanfrage",
     "invalid-url": "Ungültige URL",
+    "local-login-disabled": "Lokales Login System wurde für nicht-priviligierte Accounts deaktiviert.",
     "csrf-invalid": "Dein Login war nicht erfolgreich da wahrscheinlich deine Sitzung abgelaufen ist. Bitte versuche es noch einmal",
     "invalid-pagination-value": "Ungültige Seitennummerierung, muss mindestens %1 und maximal %2 sein",
     "username-taken": "Der Benutzername ist bereits vergeben",
@@ -145,5 +146,7 @@
     "invalid-session": "Sitzungsdiskrepanz",
     "invalid-session-text": "Es scheint als wäre deine Login-Sitzung nicht mehr aktiv oder sie passt nicht mehr mit der des Servers. Bitte aktualisiere diese Seite.",
     "no-topics-selected": "Keine Beiträge ausgewählt!",
-    "cant-move-to-same-topic": "Du kannst den Beitrag nicht in das selbe Thema schieben!"
+    "cant-move-to-same-topic": "Du kannst den Beitrag nicht in das selbe Thema schieben!",
+    "cannot-block-self": "Du kannst dich nicht selbst blocken!",
+    "cannot-block-privileged": "Du kannst keine Administratoren bzw. Globale Moderatoren blocken."
 }

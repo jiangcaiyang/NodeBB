@@ -2,6 +2,7 @@
 
 var async = require('async');
 var fs = require('fs');
+var url = require('url');
 var path = require('path');
 var prompt = require('prompt');
 var winston = require('winston');
@@ -16,9 +17,7 @@ questions.main = [
 		name: 'url',
 		description: 'URL used to access this NodeBB',
 		default:
-			nconf.get('url') ||
-			(nconf.get('base_url') ? (nconf.get('base_url') + (nconf.get('use_port') ? ':' + nconf.get('port') : '')) : null) ||	// backwards compatibility (remove for v0.7.0)
-			'http://localhost:4567',
+			nconf.get('url') || 'http://localhost:4567',
 		pattern: /^http(?:s)?:\/\//,
 		message: 'Base URL must begin with \'http://\' or \'https://\'',
 	},
@@ -171,6 +170,26 @@ function completeConfigSetup(config, next) {
 			require('./database').createIndices(next);
 		},
 		function (next) {
+			// Sanity-check/fix url/port
+			if (!/^http(?:s)?:\/\//.test(config.url)) {
+				config.url = 'http://' + config.url;
+			}
+			var urlObj = url.parse(config.url);
+			if (urlObj.port) {
+				config.port = urlObj.port;
+			}
+
+			// Remove trailing slash from non-subfolder installs
+			if (urlObj.path === '/') {
+				urlObj.path = '';
+				urlObj.pathname = '';
+			}
+
+			config.url = url.format(urlObj);
+
+			// ref: https://github.com/indexzero/nconf/issues/300
+			delete config.type;
+
 			install.save(config, next);
 		},
 	], next);
@@ -361,7 +380,7 @@ function createGlobalModeratorsGroup(next) {
 
 function giveGlobalPrivileges(next) {
 	var privileges = require('./privileges');
-	privileges.global.give(['chat', 'upload:post:image'], 'registered-users', next);
+	privileges.global.give(['chat', 'upload:post:image', 'signature'], 'registered-users', next);
 }
 
 function createCategories(next) {

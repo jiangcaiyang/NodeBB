@@ -73,10 +73,11 @@ module.exports = function (Posts) {
 
 				Posts.diffs.save(data.pid, oldContent, data.content, next);
 			},
+			async.apply(Posts.uploads.sync, data.pid),
 			function (next) {
 				postData.cid = results.topic.cid;
 				postData.topic = results.topic;
-				plugins.fireHook('action:post.edit', { post: _.clone(postData), uid: data.uid });
+				plugins.fireHook('action:post.edit', { post: _.clone(postData), data: data, uid: data.uid });
 
 				cache.del(String(postData.pid));
 				pubsub.publish('post:edit', String(postData.pid));
