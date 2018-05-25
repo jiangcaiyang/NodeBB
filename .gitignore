@@ -64,8 +64,3 @@ coverage
 ## Local uploads
 /public/uploads/
 /public/qtdream-player/
-*.log
-test/files/normalise.jpg.png
-test/files/normalise-resized.jpg
-package-lock.json
-/package.json
