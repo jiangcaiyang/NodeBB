@@ -58,7 +58,7 @@ tx.exe
 .transifexrc
 
 ##Coverage output
-coverage
+coveragema20
 .nyc_output
 
 ## Local uploads
