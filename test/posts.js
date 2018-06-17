@@ -443,6 +443,40 @@ describe('Post\'s', function () {
 				done();
 			});
 		});
+
+		it('should return diffs', function (done) {
+			posts.diffs.get(replyPid, 0, function (err, data) {
+				assert.ifError(err);
+				assert(Array.isArray(data));
+				assert(data[0].pid, replyPid);
+				assert(data[0].patch);
+				done();
+			});
+		});
+
+		it('should load diffs and reconstruct post', function (done) {
+			posts.diffs.load(replyPid, 0, voterUid, function (err, data) {
+				assert.ifError(err);
+				assert.equal(data.content, 'A reply to edit\n');
+				done();
+			});
+		});
+
+		it('should not allow guests to view diffs', function (done) {
+			socketPosts.getDiffs({ uid: 0 }, { pid: 1 }, function (err) {
+				assert.equal(err.message, '[[error:no-privileges]]');
+				done();
+			});
+		});
+
+		it('should allow registered-users group to view diffs', function (done) {
+			socketPosts.getDiffs({ uid: 1 }, { pid: 1 }, function (err, timestamps) {
+				assert.ifError(err);
+				assert.equal(true, Array.isArray(timestamps));
+				assert.strictEqual(1, timestamps.length);
+				done();
+			});
+		});
 	});
 
 	describe('move', function () {

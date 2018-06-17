@@ -5,12 +5,7 @@ var async = require('async');
 
 module.exports = function (Plugins) {
 	Plugins.deprecatedHooks = {
-		'filter:user.custom_fields': null,	// remove in v1.1.0
-		'filter:post.save': 'filter:post.create',
-		'filter:user.profileLinks': 'filter:user.profileMenu',
-		'action:post.flag': 'action:flag.create',
-		'action:flag.create': 'action:flags.create',
-		'action:flag.update': 'action:flags.update',
+
 	};
 
 	Plugins.internals = {
@@ -92,6 +87,7 @@ module.exports = function (Plugins) {
 
 		var hookList = Plugins.loadedHooks[hook];
 		var hookType = hook.split(':')[0];
+		winston.verbose('[plugins/fireHook]', hook);
 		switch (hookType) {
 		case 'filter':
 			fireFilterHook(hook, hookList, params, callback);

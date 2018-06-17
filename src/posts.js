@@ -109,6 +109,20 @@ Posts.getPostData = function (pid, callback) {
 	], callback);
 };
 
+Posts.getPostsData = function (pids, callback) {
+	async.waterfall([
+		function (next) {
+			db.getObjects(pids.map(pid => 'post:' + pid), next);
+		},
+		function (data, next) {
+			plugins.fireHook('filter:post.getPostsData', { posts: data }, next);
+		},
+		function (data, next) {
+			next(null, data.posts);
+		},
+	], callback);
+};
+
 Posts.getPostField = function (pid, field, callback) {
 	async.waterfall([
 		function (next) {
@@ -299,8 +313,8 @@ Posts.updatePostVoteCount = function (postData, callback) {
 	});
 };
 
-Posts.modifyPostByPrivilege = function (post, isAdminOrMod) {
-	if (post.deleted && !(isAdminOrMod || post.selfPost)) {
+Posts.modifyPostByPrivilege = function (post, privileges) {
+	if (post.deleted && !(post.selfPost || privileges['posts:view_deleted'])) {
 		post.content = '[[topic:post_is_deleted]]';
 		if (post.user) {
 			post.user.signature = '';

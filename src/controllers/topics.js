@@ -13,6 +13,7 @@ var plugins = require('../plugins');
 var helpers = require('./helpers');
 var pagination = require('../pagination');
 var utils = require('../utils');
+var analytics = require('../analytics');
 
 var topicsController = module.exports;
 
@@ -178,6 +179,8 @@ topicsController.get = function (req, res, callback) {
 				});
 			}
 
+			analytics.increment(['pageviews:byCid:' + topicData.category.cid]);
+
 			res.render('topic', topicData);
 		},
 	], callback);
@@ -320,7 +323,7 @@ function addOGImageTagsForPosts(res, posts) {
 
 function addOGImageTag(res, imageUrl) {
 	if (typeof imageUrl === 'string' && !imageUrl.startsWith('http')) {
-		imageUrl = nconf.get('url') + imageUrl;
+		imageUrl = nconf.get('url') + imageUrl.replace(new RegExp('^' + nconf.get('relative_path')), '');
 	}
 	res.locals.metaTags.push({
 		property: 'og:image',

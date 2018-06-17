@@ -41,10 +41,13 @@ module.exports = function (Topics) {
 			},
 			function (tids, next) {
 				recentTopics.topicCount = tids.length;
-				tids = tids.slice(start, stop + 1);
+				tids = tids.slice(start, stop !== -1 ? stop + 1 : undefined);
 				Topics.getTopicsByTids(tids, uid, next);
 			},
 			function (topicData, next) {
+				topicData.forEach(function (topicObj, i) {
+					topicObj.index = start + i;
+				});
 				recentTopics.topics = topicData;
 				recentTopics.nextStart = stop + 1;
 				next(null, recentTopics);

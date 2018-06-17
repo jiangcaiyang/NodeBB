@@ -1,0 +1,28 @@
+{
+	"global": "Глобални",
+	"global.no-users": "Няма глобални правомощия за отделни потребители.",
+
+	"chat": "Разговор",
+	"upload-images": "Качване на изображения",
+	"upload-files": "Качване на файлове",
+	"signature": "Подпис",
+	"ban": "Блокиране",
+	"search-content": "Търсене на съдържание",
+	"search-users": "Търсене на потребители",
+	"search-tags": "Търсене на етикети",
+
+	"find-category": "Find Category",
+	"access-category": "Access Category",
+	"access-topics": "Access Topics",
+	"create-topics": "Create Topics",
+	"reply-to-topics": "Reply to Topics",
+	"tag-topics": "Tag Topics",
+	"edit-posts": "Edit Posts",
+	"view-edit-history": "View Edit History",
+	"delete-posts": "Delete Posts",
+	"upvote-posts": "Upvote Posts",
+	"downvote-posts": "Downvote Posts",
+	"delete-topics": "Delete Topics",
+	"purge": "Purge",
+	"moderate": "Moderate"
+}
