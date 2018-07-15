@@ -20,8 +20,6 @@ require('./topics/create')(Topics);
 require('./topics/delete')(Topics);
 require('./topics/unread')(Topics);
 require('./topics/recent')(Topics);
-require('./topics/popular')(Topics);
-require('./topics/top')(Topics);
 require('./topics/user')(Topics);
 require('./topics/fork')(Topics);
 require('./topics/posts')(Topics);
@@ -227,10 +225,6 @@ Topics.getTopicWithPosts = function (topicData, set, uid, start, stop, reverse, 
 			topicData.deleted = parseInt(topicData.deleted, 10) === 1;
 			topicData.locked = parseInt(topicData.locked, 10) === 1;
 			topicData.pinned = parseInt(topicData.pinned, 10) === 1;
-
-			topicData.upvotes = parseInt(topicData.upvotes, 10) || 0;
-			topicData.downvotes = parseInt(topicData.downvotes, 10) || 0;
-			topicData.votes = topicData.upvotes - topicData.downvotes;
 
 			topicData.icons = [];
 
