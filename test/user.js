@@ -1797,14 +1797,41 @@ describe('User', function () {
 			});
 		});
 
+		describe('.toggle()', function () {
+			it('should toggle block', function (done) {
+				socketUser.toggleBlock({ uid: 1 }, { blockerUid: 1, blockeeUid: blockeeUid }, function (err) {
+					assert.ifError(err);
+					User.blocks.is(blockeeUid, 1, function (err, blocked) {
+						assert.ifError(err);
+						assert(blocked);
+						done();
+					});
+				});
+			});
+
+			it('should toggle block', function (done) {
+				socketUser.toggleBlock({ uid: 1 }, { blockerUid: 1, blockeeUid: blockeeUid }, function (err) {
+					assert.ifError(err);
+					User.blocks.is(blockeeUid, 1, function (err, blocked) {
+						assert.ifError(err);
+						assert(!blocked);
+						done();
+					});
+				});
+			});
+		});
+
 		describe('.add()', function () {
 			it('should block a uid', function (done) {
-				User.blocks.add(blockeeUid, 1, function (err, blocked_uids) {
+				User.blocks.add(blockeeUid, 1, function (err) {
 					assert.ifError(err);
-					assert.strictEqual(Array.isArray(blocked_uids), true);
-					assert.strictEqual(blocked_uids.length, 1);
-					assert.strictEqual(blocked_uids.includes(blockeeUid), true);
-					done();
+					User.blocks.list(1, function (err, blocked_uids) {
+						assert.ifError(err);
+						assert.strictEqual(Array.isArray(blocked_uids), true);
+						assert.strictEqual(blocked_uids.length, 1);
+						assert.strictEqual(blocked_uids.includes(blockeeUid), true);
+						done();
+					});
 				});
 			});
 
@@ -1826,11 +1853,14 @@ describe('User', function () {
 
 		describe('.remove()', function () {
 			it('should unblock a uid', function (done) {
-				User.blocks.remove(blockeeUid, 1, function (err, blocked_uids) {
+				User.blocks.remove(blockeeUid, 1, function (err) {
 					assert.ifError(err);
-					assert.strictEqual(Array.isArray(blocked_uids), true);
-					assert.strictEqual(blocked_uids.length, 0);
-					done();
+					User.blocks.list(1, function (err, blocked_uids) {
+						assert.ifError(err);
+						assert.strictEqual(Array.isArray(blocked_uids), true);
+						assert.strictEqual(blocked_uids.length, 0);
+						done();
+					});
 				});
 			});
 
@@ -1932,6 +1962,14 @@ describe('User', function () {
 					assert.ifError(err);
 					assert.strictEqual(filtered.length, 1);
 					assert.strictEqual(filtered[0], 1);
+					done();
+				});
+			});
+
+			it('should filter uids that are blocking targetUid', function (done) {
+				User.blocks.filterUids(blockeeUid, [1, 2], function (err, filtered) {
+					assert.ifError(err);
+					assert.deepEqual(filtered, [2]);
 					done();
 				});
 			});
