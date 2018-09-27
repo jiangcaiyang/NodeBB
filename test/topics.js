@@ -1063,14 +1063,12 @@ describe('Topic\'s', function () {
 			});
 		});
 
-
 		it('should fail with invalid data', function (done) {
 			socketTopics.markAsRead({ uid: 0 }, null, function (err) {
 				assert.equal(err.message, '[[error:invalid-data]]');
 				done();
 			});
 		});
-
 
 		it('should mark topic read', function (done) {
 			socketTopics.markAsRead({ uid: adminUid }, [tid], function (err) {
@@ -1156,7 +1154,6 @@ describe('Topic\'s', function () {
 			});
 		});
 
-
 		it('should fail with invalid data', function (done) {
 			socketTopics.markAsUnreadForAll({ uid: adminUid }, null, function (err) {
 				assert.equal(err.message, '[[error:invalid-tid]]');
@@ -1211,6 +1208,35 @@ describe('Topic\'s', function () {
 				done();
 			});
 		});
+
+		it('should not return topics in category you cant read', function (done) {
+			var privateCid;
+			var privateTid;
+			async.waterfall([
+				function (next) {
+					categories.create({
+						name: 'private category',
+						description: 'private category',
+					}, next);
+				},
+				function (category, next) {
+					privateCid = category.cid;
+					privileges.categories.rescind(['read'], category.cid, 'registered-users', next);
+				},
+				function (next) {
+					topics.post({ uid: adminUid, title: 'topic in private category', content: 'registered-users cant see this', cid: privateCid }, next);
+				},
+				function (data, next) {
+					privateTid = data.topicData.tid;
+					topics.getUnreadTids({ uid: uid }, next);
+				},
+				function (unreadTids, next) {
+					unreadTids = unreadTids.map(String);
+					assert(!unreadTids.includes(String(privateTid)));
+					next();
+				},
+			], done);
+		});
 	});
 
 	describe('tags', function () {
@@ -1218,14 +1244,14 @@ describe('Topic\'s', function () {
 		var socketAdmin = require('../src/socket.io/admin');
 
 		before(function (done) {
-			async.parallel({
-				topic1: function (next) {
+			async.series([
+				function (next) {
 					topics.post({ uid: adminUid, tags: ['php', 'nosql', 'psql', 'nodebb'], title: 'topic title 1', content: 'topic 1 content', cid: topic.categoryId }, next);
 				},
-				topic2: function (next) {
+				function (next) {
 					topics.post({ uid: adminUid, tags: ['javascript', 'mysql', 'python', 'nodejs'], title: 'topic title 2', content: 'topic 2 content', cid: topic.categoryId }, next);
 				},
-			}, function (err) {
+			], function (err) {
 				assert.ifError(err);
 				done();
 			});
