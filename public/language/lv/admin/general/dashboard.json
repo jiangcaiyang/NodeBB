@@ -1,6 +1,6 @@
 {
 	"forum-traffic": "Forum Traffic",
-	"page-views": "Page Views",
+	"page-views": "Lapu skatījumi",
 	"unique-visitors": "Unique Visitors",
 	"users": "Users",
 	"posts": "Posts",
@@ -17,7 +17,7 @@
 	"stats.day": "Day",
 	"stats.week": "Week",
 	"stats.month": "Month",
-	"stats.all": "All Time",
+	"stats.all": "Visu laiku",
 
 	"updates": "Updates",
 	"running-version": "You are running <strong>NodeBB v<span id=\"version\">%1</span></strong>.",
@@ -64,7 +64,7 @@
 
 	"high-presence-topics": "High Presence Topics",
 
-	"graphs.page-views": "Page Views",
+	"graphs.page-views": "Lapu skatījumi",
 	"graphs.unique-visitors": "Unique Visitors",
 	"graphs.registered-users": "Registered Users",
 	"graphs.anonymous-users": "Anonymous Users",

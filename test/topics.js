@@ -23,7 +23,6 @@ describe('Topic\'s', function () {
 	var adminUid;
 
 	before(function (done) {
-		groups.resetCache();
 		User.create({ username: 'admin', password: '123456' }, function (err, uid) {
 			if (err) {
 				return done(err);
@@ -981,7 +980,7 @@ describe('Topic\'s', function () {
 		var tid1;
 		var tid3;
 		before(function (done) {
-			async.parallel({
+			async.series({
 				topic1: function (next) {
 					topics.post({ uid: adminUid, tags: ['nodebb'], title: 'topic title 1', content: 'topic 1 content', cid: topic.categoryId }, next);
 				},
