@@ -1,7 +1,7 @@
 {
-	"logs": "Žurnāli",
-	"control-panel": "Žurnālu vadības panelis",
-	"reload": "Pārlādēt žurnālus",
-	"clear": "Notīrīt žurnālus",
-	"clear-success": "Zurnāli notīrīti!"
+	"logs": "Žurnāls",
+	"control-panel": "Žurnāla vadības panelis",
+	"reload": "Pārlādēt žurnālu",
+	"clear": "Notīrīt žurnālu",
+	"clear-success": "Zurnāls notīrīts!"
 }
