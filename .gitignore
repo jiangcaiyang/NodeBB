@@ -58,11 +58,9 @@ tx.exe
 .transifexrc
 
 ##Coverage output
-coverage
+coveragema20
 .nyc_output
 
-*.log
-test/files/normalise.jpg.png
-test/files/normalise-resized.jpg
-package-lock.json
-/package.json
+## Local uploads
+/public/uploads/
+/public/qtdream-player/

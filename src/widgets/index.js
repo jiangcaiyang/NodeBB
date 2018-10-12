@@ -93,7 +93,7 @@ function renderWidget(widget, uid, options, callback) {
 			if (typeof html !== 'string') {
 				html = data.html;
 			} else {
-				winston.warn('[widgets.render] passing a string is deprecated!, filter:widget.render:' + widget.widget + '. Please set hookData.html in your plugin.');
+                //winston.warn('[widgets.render] passing a string is deprecated!, filter:widget.render:' + widget.widget + '. Please set hookData.html in your plugin.');
 			}
 
 			if (widget.data.container && widget.data.container.match('{body}')) {
