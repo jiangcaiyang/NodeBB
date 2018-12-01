@@ -7,6 +7,7 @@ var plugins = require('../plugins');
 var topics = require('../topics');
 var groups = require('../groups');
 var privileges = require('../privileges');
+var cache = require('../cache');
 
 module.exports = function (Categories) {
 	Categories.purge = function (cid, uid, callback) {
@@ -58,9 +59,7 @@ module.exports = function (Categories) {
 				], next);
 			},
 			function (next) {
-				groups.destroy(privileges.privilegeList.map(function (privilege) {
-					return 'cid:' + cid + ':privileges:' + privilege;
-				}), next);
+				groups.destroy(privileges.privilegeList.map(privilege => 'cid:' + cid + ':privileges:' + privilege), next);
 			},
 		], function (err) {
 			callback(err);
@@ -82,7 +81,6 @@ module.exports = function (Categories) {
 			function (results, next) {
 				async.parallel([
 					function (next) {
-						results.parentCid = parseInt(results.parentCid, 10) || 0;
 						db.sortedSetRemove('cid:' + results.parentCid + ':children', cid, next);
 					},
 					function (next) {
@@ -97,7 +95,18 @@ module.exports = function (Categories) {
 							], next);
 						}, next);
 					},
-				], next);
+				], function (err) {
+					if (err) {
+						return next(err);
+					}
+					cache.del([
+						'categories:cid',
+						'cid:0:children',
+						'cid:' + results.parentCid + ':children',
+						'cid:' + cid + ':children',
+					]);
+					next();
+				});
 			},
 		], function (err) {
 			callback(err);

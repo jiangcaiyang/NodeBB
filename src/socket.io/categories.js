@@ -1,7 +1,7 @@
 'use strict';
 
 var async = require('async');
-var db = require('../database');
+
 var categories = require('../categories');
 var privileges = require('../privileges');
 var user = require('../user');
@@ -21,7 +21,7 @@ SocketCategories.get = function (socket, data, callback) {
 				isAdmin: async.apply(user.isAdministrator, socket.uid),
 				categories: function (next) {
 					async.waterfall([
-						async.apply(db.getSortedSetRange, 'categories:cid', 0, -1),
+						async.apply(categories.getAllCidsFromSet, 'categories:cid'),
 						async.apply(categories.getCategoriesData),
 					], next);
 				},
@@ -47,7 +47,7 @@ SocketCategories.getWatchedCategories = function (socket, data, callback) {
 		},
 		function (results, next) {
 			var watchedCategories = results.categories.filter(function (category) {
-				return category && results.ignoredCids.indexOf(category.cid.toString()) === -1;
+				return category && !results.ignoredCids.includes(String(category.cid));
 			});
 
 			next(null, watchedCategories);
@@ -139,12 +139,13 @@ SocketCategories.getMoveCategories = function (socket, data, callback) {
 				categories: function (next) {
 					async.waterfall([
 						function (next) {
-							db.getSortedSetRange('cid:0:children', 0, -1, next);
+							categories.getAllCidsFromSet('categories:cid', next);
 						},
 						function (cids, next) {
 							categories.getCategories(cids, socket.uid, next);
 						},
 						function (categoriesData, next) {
+							categoriesData = categories.getTree(categoriesData);
 							categories.buildForSelectCategories(categoriesData, next);
 						},
 					], next);
@@ -182,22 +183,17 @@ function ignoreOrWatch(fn, socket, cid, callback) {
 			user.isAdminOrGlobalModOrSelf(socket.uid, targetUid, next);
 		},
 		function (next) {
-			db.getSortedSetRange('categories:cid', 0, -1, next);
+			categories.getAllCidsFromSet('categories:cid', next);
 		},
 		function (cids, next) {
 			categories.getCategoriesFields(cids, ['cid', 'parentCid'], next);
 		},
 		function (categoryData, next) {
-			categoryData.forEach(function (c) {
-				c.cid = parseInt(c.cid, 10);
-				c.parentCid = parseInt(c.parentCid, 10);
-			});
-
 			// filter to subcategories of cid
 			var cat;
 			do {
 				cat = categoryData.find(function (c) {
-					return cids.indexOf(c.cid) === -1 && cids.indexOf(c.parentCid) !== -1;
+					return !cids.includes(c.cid) && cids.includes(c.parentCid);
 				});
 				if (cat) {
 					cids.push(cat.cid);

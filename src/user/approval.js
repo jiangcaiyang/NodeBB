@@ -1,4 +1,3 @@
-
 'use strict';
 
 var async = require('async');
@@ -11,7 +10,6 @@ var meta = require('../meta');
 var emailer = require('../emailer');
 var notifications = require('../notifications');
 var groups = require('../groups');
-var translator = require('../translator');
 var utils = require('../utils');
 var plugins = require('../plugins');
 
@@ -20,7 +18,7 @@ module.exports = function (User) {
 		userData.userslug = utils.slugify(userData.username);
 		async.waterfall([
 			function (next) {
-				User.isDataValid(userData, next);
+				canQueue(userData, next);
 			},
 			function (next) {
 				User.hashPassword(userData.password, next);
@@ -45,6 +43,31 @@ module.exports = function (User) {
 			},
 		], callback);
 	};
+
+	function canQueue(userData, callback) {
+		async.waterfall([
+			function (next) {
+				User.isDataValid(userData, next);
+			},
+			function (next) {
+				db.getSortedSetRange('registration:queue', 0, -1, next);
+			},
+			function (usernames, next) {
+				if (usernames.includes(userData.username)) {
+					return next(new Error('[[error:username-taken]]'));
+				}
+				const keys = usernames.filter(Boolean).map(username => 'registration:queue:name:' + username);
+				db.getObjectsFields(keys, ['email'], next);
+			},
+			function (data, next) {
+				const emails = data.map(data => data && data.email);
+				if (emails.includes(userData.email)) {
+					return next(new Error('[[error:email-taken]]'));
+				}
+				next();
+			},
+		], callback);
+	}
 
 	function sendNotificationToAdmins(username, callback) {
 		async.waterfall([
@@ -89,16 +112,14 @@ module.exports = function (User) {
 			},
 			function (next) {
 				var title = meta.config.title || meta.config.browserTitle || 'NodeBB';
-				translator.translate('[[email:welcome-to, ' + title + ']]', meta.config.defaultLang, function (subject) {
-					var data = {
-						username: username,
-						subject: subject,
-						template: 'registration_accepted',
-						uid: uid,
-					};
+				var data = {
+					username: username,
+					subject: '[[email:welcome-to, ' + title + ']]',
+					template: 'registration_accepted',
+					uid: uid,
+				};
 
-					emailer.send('registration_accepted', uid, data, next);
-				});
+				emailer.send('registration_accepted', uid, data, next);
 			},
 			function (next) {
 				next(null, uid);

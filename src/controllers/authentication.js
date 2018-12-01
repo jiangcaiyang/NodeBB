@@ -14,10 +14,12 @@ var plugins = require('../plugins');
 var utils = require('../utils');
 var translator = require('../translator');
 var helpers = require('./helpers');
+var middleware = require('../middleware');
 var privileges = require('../privileges');
 var sockets = require('../socket.io');
 
 var authenticationController = module.exports;
+var apiController = require('./api');
 
 authenticationController.register = function (req, res) {
 	var registrationType = meta.config.registrationType || 'normal';
@@ -164,6 +166,10 @@ authenticationController.registerComplete = function (req, res, next) {
 
 		var done = function (err, data) {
 			delete req.session.registration;
+			if (err) {
+				return res.redirect(nconf.get('relative_path') + '/?register=' + encodeURIComponent(err.message));
+			}
+
 			if (!err && data && data.message) {
 				return res.redirect(nconf.get('relative_path') + '/?register=' + encodeURIComponent(data.message));
 			}
@@ -220,8 +226,9 @@ authenticationController.login = function (req, res, next) {
 	}
 
 	var loginWith = meta.config.allowLoginWith || 'username-email';
+	req.body.username = req.body.username.trim();
 
-	if (req.body.username && utils.isEmailValid(req.body.username) && loginWith.indexOf('email') !== -1) {
+	if (req.body.username && utils.isEmailValid(req.body.username) && loginWith.includes('email')) {
 		async.waterfall([
 			function (next) {
 				user.getUsernameByEmail(req.body.username, next);
@@ -231,7 +238,7 @@ authenticationController.login = function (req, res, next) {
 				continueLogin(req, res, next);
 			},
 		], next);
-	} else if (loginWith.indexOf('username') !== -1 && !validator.isEmail(req.body.username)) {
+	} else if (loginWith.includes('username') && !validator.isEmail(req.body.username)) {
 		continueLogin(req, res, next);
 	} else {
 		var err = '[[error:wrong-login-type-' + loginWith + ']]';
@@ -256,7 +263,7 @@ function continueLogin(req, res, next) {
 
 		// Alter user cookie depending on passed-in option
 		if (req.body.remember === 'on') {
-			var duration = 1000 * 60 * 60 * 24 * (parseInt(meta.config.loginDays, 10) || 14);
+			var duration = 1000 * 60 * 60 * 24 * meta.config.loginDays;
 			req.session.cookie.maxAge = duration;
 			req.session.cookie.expires = new Date(Date.now() + duration);
 		} else {
@@ -272,10 +279,16 @@ function continueLogin(req, res, next) {
 					return helpers.noScriptErrors(req, res, err.message, 403);
 				}
 
-				res.status(200).send(nconf.get('relative_path') + '/reset/' + code);
+				res.status(200).send({
+					next: nconf.get('relative_path') + '/reset/' + code,
+				});
 			});
 		} else {
-			authenticationController.doLogin(req, userData.uid, function (err) {
+			async.parallel({
+				doLogin: async.apply(authenticationController.doLogin, req, userData.uid),
+				header: async.apply(middleware.generateHeader, req, res, {}),
+				config: async.apply(apiController.loadConfig, req),
+			}, function (err, payload) {
 				if (err) {
 					return helpers.noScriptErrors(req, res, err.message, 403);
 				}
@@ -291,7 +304,11 @@ function continueLogin(req, res, next) {
 				if (req.body.noscript === 'true') {
 					res.redirect(destination + '?loggedin');
 				} else {
-					res.status(200).send(destination);
+					res.status(200).send({
+						next: destination,
+						header: payload.header,
+						config: payload.config,
+					});
 				}
 			});
 		}
@@ -314,6 +331,9 @@ authenticationController.doLogin = function (req, uid, callback) {
 
 authenticationController.onSuccessfulLogin = function (req, uid, callback) {
 	var uuid = utils.generateUUID();
+
+	req.uid = uid;
+	req.loggedIn = true;
 
 	async.waterfall([
 		function (next) {
@@ -446,7 +466,8 @@ authenticationController.logout = function (req, res, next) {
 		},
 		function (next) {
 			req.logout();
-			req.session.destroy(function (err) {
+			req.session.regenerate(function (err) {
+				req.uid = 0;
 				next(err);
 			});
 		},
@@ -462,7 +483,19 @@ authenticationController.logout = function (req, res, next) {
 			if (req.body.noscript === 'true') {
 				res.redirect(nconf.get('relative_path') + '/');
 			} else {
-				res.status(200).send('');
+				async.parallel({
+					header: async.apply(middleware.generateHeader, req, res, {}),
+					config: async.apply(apiController.loadConfig, req),
+				}, function (err, payload) {
+					if (err) {
+						return res.status(500);
+					}
+
+					res.status(200).send({
+						header: payload.header,
+						config: payload.config,
+					});
+				});
 			}
 		},
 	], next);

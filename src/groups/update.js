@@ -6,6 +6,7 @@ var winston = require('winston');
 var plugins = require('../plugins');
 var utils = require('../utils');
 var db = require('../database');
+var user = require('../user');
 
 
 module.exports = function (Groups) {
@@ -131,7 +132,7 @@ module.exports = function (Groups) {
 				Groups.getGroupFields(groupName, ['private'], next);
 			},
 			function (currentValue, next) {
-				var currentlyPrivate = parseInt(currentValue.private, 10) === 1;
+				var currentlyPrivate = currentValue.private === 1;
 				if (!currentlyPrivate || currentlyPrivate === isPrivate) {
 					return callback();
 				}
@@ -142,11 +143,9 @@ module.exports = function (Groups) {
 					return callback();
 				}
 				var now = Date.now();
-				var scores = uids.map(function () { return now; });
-
 				winston.verbose('[groups.update] Group is now public, automatically adding ' + uids.length + ' new members, who were pending prior.');
 				async.series([
-					async.apply(db.sortedSetAdd, 'group:' + groupName + ':members', scores, uids),
+					async.apply(db.sortedSetAdd, 'group:' + groupName + ':members', uids.map(() => now), uids),
 					async.apply(db.delete, 'group:' + groupName + ':pending'),
 				], next);
 			},
@@ -215,6 +214,7 @@ module.exports = function (Groups) {
 					return callback(new Error('[[error:group-already-exists]]'));
 				}
 				async.series([
+					async.apply(updateMemberGroupTitles, oldName, newName),
 					async.apply(db.setObjectField, 'group:' + oldName, 'name', newName),
 					async.apply(db.setObjectField, 'group:' + oldName, 'slug', utils.slugify(newName)),
 					async.apply(db.deleteObjectField, 'groupslug:groupname', group.slug),
@@ -234,6 +234,7 @@ module.exports = function (Groups) {
 					async.apply(db.rename, 'group:' + oldName + ':owners', 'group:' + newName + ':owners'),
 					async.apply(db.rename, 'group:' + oldName + ':pending', 'group:' + newName + ':pending'),
 					async.apply(db.rename, 'group:' + oldName + ':invited', 'group:' + newName + ':invited'),
+					async.apply(db.rename, 'group:' + oldName + ':member:pids', 'group:' + newName + ':member:pids'),
 
 					async.apply(renameGroupMember, 'groups:createtime', oldName, newName),
 					async.apply(renameGroupMember, 'groups:visible:createtime', oldName, newName),
@@ -253,6 +254,24 @@ module.exports = function (Groups) {
 			callback(err);
 		});
 	};
+
+	function updateMemberGroupTitles(oldName, newName, callback) {
+		const batch = require('../batch');
+		batch.processSortedSet('group:' + oldName + ':members', function (uids, next) {
+			async.waterfall([
+				function (next) {
+					user.getUsersData(uids, next);
+				},
+				function (usersData, next) {
+					usersData = usersData.filter(userData => userData && userData.groupTitleArray.includes(oldName));
+					async.each(usersData, function (userData, next) {
+						const newTitleArray = userData.groupTitleArray.map(oldTitle => (oldTitle === oldName ? newName : oldTitle));
+						user.setUserField(userData.uid, 'groupTitle', JSON.stringify(newTitleArray), next);
+					}, next);
+				},
+			], next);
+		}, callback);
+	}
 
 	function renameGroupMember(group, oldName, newName, callback) {
 		var score;

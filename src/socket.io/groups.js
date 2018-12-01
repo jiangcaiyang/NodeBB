@@ -19,7 +19,7 @@ SocketGroups.before = function (socket, method, data, next) {
 };
 
 SocketGroups.join = function (socket, data, callback) {
-	if (!parseInt(socket.uid, 10)) {
+	if (socket.uid <= 0) {
 		return callback(new Error('[[error:invalid-uid]]'));
 	}
 
@@ -36,7 +36,7 @@ SocketGroups.join = function (socket, data, callback) {
 				return next(new Error('[[error:no-group]]'));
 			}
 
-			if (parseInt(meta.config.allowPrivateGroups, 10) !== 1) {
+			if (!meta.config.allowPrivateGroups) {
 				return groups.join(data.groupName, socket.uid, callback);
 			}
 
@@ -60,7 +60,7 @@ SocketGroups.join = function (socket, data, callback) {
 };
 
 SocketGroups.leave = function (socket, data, callback) {
-	if (!parseInt(socket.uid, 10)) {
+	if (socket.uid <= 0) {
 		return callback(new Error('[[error:invalid-uid]]'));
 	}
 
@@ -238,7 +238,7 @@ SocketGroups.kick = isOwner(function (socket, data, callback) {
 SocketGroups.create = function (socket, data, callback) {
 	if (!socket.uid) {
 		return callback(new Error('[[error:no-privileges]]'));
-	} else if (parseInt(meta.config.allowGroupCreation, 10) !== 1) {
+	} else if (!meta.config.allowGroupCreation) {
 		return callback(new Error('[[error:group-creation-disabled]]'));
 	} else if (groups.isPrivilegeGroup(data.name)) {
 		return callback(new Error('[[error:invalid-group-name]]'));

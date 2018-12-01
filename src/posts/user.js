@@ -24,7 +24,7 @@ module.exports = function (Posts) {
 						user.getUsersFields(uids, [
 							'uid', 'username', 'fullname', 'userslug',
 							'reputation', 'postcount', 'picture', 'signature',
-							'banned', 'status', 'lastonline', 'groupTitle',
+							'banned', 'banned:expire', 'status', 'lastonline', 'groupTitle',
 						], next);
 					},
 					userSettings: function (next) {
@@ -65,14 +65,14 @@ module.exports = function (Posts) {
 					userData.userslug = userData.userslug || '';
 					userData.reputation = userData.reputation || 0;
 					userData.postcount = userData.postcount || 0;
-					userData.banned = parseInt(userData.banned, 10) === 1;
+					userData.banned = userData.banned === 1;
 					userData.picture = userData.picture || '';
 					userData.status = user.getStatus(userData);
 					userData.signature = validator.escape(String(userData.signature || ''));
 					userData.fullname = userSettings[index].showfullname ? validator.escape(String(userData.fullname || '')) : undefined;
 					userData.selectedGroups = [];
 
-					if (parseInt(meta.config.hideFullname, 10) === 1) {
+					if (meta.config.hideFullname) {
 						userData.fullname = undefined;
 					}
 				});
@@ -88,7 +88,7 @@ module.exports = function (Posts) {
 									groups.isMemberOfGroups(userData.uid, userData.groupTitleArray, next);
 								},
 								signature: function (next) {
-									if (!userData.signature || !canUseSignature || parseInt(meta.config.disableSignatures, 10) === 1) {
+									if (!userData.signature || !canUseSignature || meta.config.disableSignatures) {
 										userData.signature = '';
 										return next();
 									}
@@ -121,31 +121,29 @@ module.exports = function (Posts) {
 	Posts.isOwner = function (pid, uid, callback) {
 		uid = parseInt(uid, 10);
 		if (Array.isArray(pid)) {
-			if (!uid) {
-				return callback(null, pid.map(function () { return false; }));
+			if (uid <= 0) {
+				return setImmediate(callback, null, pid.map(() => false));
 			}
 			Posts.getPostsFields(pid, ['uid'], function (err, posts) {
 				if (err) {
 					return callback(err);
 				}
-				posts = posts.map(function (post) {
-					return post && parseInt(post.uid, 10) === uid;
-				});
+				posts = posts.map(post => post && post.uid === uid);
 				callback(null, posts);
 			});
 		} else {
-			if (!uid) {
-				return callback(null, false);
+			if (uid <= 0) {
+				return setImmediate(callback, null, false);
 			}
 			Posts.getPostField(pid, 'uid', function (err, author) {
-				callback(err, parseInt(author, 10) === uid);
+				callback(err, author === uid);
 			});
 		}
 	};
 
 	Posts.isModerator = function (pids, uid, callback) {
-		if (!parseInt(uid, 10)) {
-			return callback(null, pids.map(function () { return false; }));
+		if (parseInt(uid, 10) <= 0) {
+			return setImmediate(callback, null, pids.map(() => false));
 		}
 		Posts.getCidsByPids(pids, function (err, cids) {
 			if (err) {

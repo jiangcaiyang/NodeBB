@@ -3,7 +3,6 @@
 var async = require('async');
 
 var privileges = require('../privileges');
-var cache = require('./cache');
 
 module.exports = function (Posts) {
 	Posts.tools = {};
@@ -28,9 +27,9 @@ module.exports = function (Posts) {
 				Posts.getPostField(pid, 'deleted', next);
 			},
 			function (deleted, next) {
-				if (parseInt(deleted, 10) === 1 && isDelete) {
+				if (deleted && isDelete) {
 					return next(new Error('[[error:post-already-deleted]]'));
-				} else if (parseInt(deleted, 10) !== 1 && !isDelete) {
+				} else if (!deleted && !isDelete) {
 					return next(new Error('[[error:post-already-restored]]'));
 				}
 
@@ -42,7 +41,7 @@ module.exports = function (Posts) {
 				}
 
 				if (isDelete) {
-					cache.del(pid);
+					require('./cache').del(pid);
 					Posts.delete(pid, uid, next);
 				} else {
 					Posts.restore(pid, uid, function (err, postData) {
@@ -65,10 +64,9 @@ module.exports = function (Posts) {
 				if (!canPurge) {
 					return next(new Error('[[error:no-privileges]]'));
 				}
-				cache.del(pid);
+				require('./cache').del(pid);
 				Posts.purge(pid, uid, next);
 			},
 		], callback);
 	};
 };
-

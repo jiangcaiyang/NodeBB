@@ -20,6 +20,7 @@ var favicon = require('serve-favicon');
 var detector = require('spider-detector');
 var helmet = require('helmet');
 
+var Benchpress = require('benchpressjs');
 var db = require('./database');
 var file = require('./file');
 var emailer = require('./emailer');
@@ -30,7 +31,6 @@ var plugins = require('./plugins');
 var flags = require('./flags');
 var routes = require('./routes');
 var auth = require('./routes/authentication');
-var Benchpress = require('benchpressjs');
 
 var helpers = require('../public/src/modules/helpers');
 
@@ -44,6 +44,7 @@ if (nconf.get('ssl')) {
 }
 
 module.exports.server = server;
+module.exports.app = app;
 
 server.on('error', function (err) {
 	if (err.code === 'EADDRINUSE') {
@@ -120,10 +121,7 @@ function initializeNodeBB(callback) {
 			}, next);
 		},
 		function (next) {
-			plugins.fireHook('filter:hotswap.prepare', [], next);
-		},
-		function (hotswapIds, next) {
-			routes(app, middleware, hotswapIds, next);
+			routes(app, middleware, next);
 		},
 		meta.sounds.addUploads,
 		meta.blacklist.load,
@@ -182,12 +180,11 @@ function setupExpressApp(app, callback) {
 	}));
 
 	var hsts_option = {
-		maxAge: parseInt(meta.config['hsts-maxage'], 10) || 31536000,
-		includeSubdomains: !!parseInt(meta.config['hsts-subdomains'], 10),
-		preload: !!parseInt(meta.config['hsts-preload'], 10),
+		maxAge: meta.config['hsts-maxage'],
+		includeSubdomains: !!meta.config['hsts-subdomains'],
+		preload: !!meta.config['hsts-preload'],
 		setIf: function () {
-			// If not set, default to on - previous and recommended behavior
-			return meta.config['hsts-enabled'] === undefined || !!parseInt(meta.config['hsts-enabled'], 10);
+			return !!meta.config['hsts-enabled'];
 		},
 	};
 	app.use(helmet({
@@ -199,8 +196,8 @@ function setupExpressApp(app, callback) {
 	auth.initialize(app, middleware);
 
 	var toobusy = require('toobusy-js');
-	toobusy.maxLag(parseInt(meta.config.eventLoopLagThreshold, 10) || 100);
-	toobusy.interval(parseInt(meta.config.eventLoopInterval, 10) || 500);
+	toobusy.maxLag(meta.config.eventLoopLagThreshold);
+	toobusy.interval(meta.config.eventLoopInterval);
 
 	setupAutoLocale(app, callback);
 }
@@ -249,7 +246,7 @@ function setupAutoLocale(app, callback) {
 		});
 
 		app.use(function (req, res, next) {
-			if (parseInt(req.uid, 10) > 0 || parseInt(meta.config.autoDetectLang, 10) !== 1) {
+			if (parseInt(req.uid, 10) > 0 || !meta.config.autoDetectLang) {
 				return next();
 			}
 
@@ -357,4 +354,3 @@ module.exports.testSocket = function (socketPath, callback) {
 		async.apply(fs.unlink, socketPath),	// The socket was stale, kick it out of the way
 	], callback);
 };
-

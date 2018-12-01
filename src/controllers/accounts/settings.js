@@ -102,7 +102,7 @@ settingsController.get = function (req, res, callback) {
 		function (results) {
 			userData.homePageRoutes = results.routes;
 			userData.notificationSettings = results.notificationSettings;
-			userData.disableEmailSubscriptions = parseInt(meta.config.disableEmailSubscriptions, 10) === 1;
+			userData.disableEmailSubscriptions = meta.config.disableEmailSubscriptions;
 
 			userData.dailyDigestFreqOptions = [
 				{ value: 'off', name: '[[user:digest_off]]', selected: userData.settings.dailyDigestFreq === 'off' },
@@ -112,8 +112,7 @@ settingsController.get = function (req, res, callback) {
 			];
 
 			userData.bootswatchSkinOptions = [
-				{ name: 'No skin', value: 'noskin' },
-				{ name: 'Default', value: 'default' },
+				{ name: 'Default', value: '' },
 				{ name: 'Cerulean', value: 'cerulean' },
 				{ name: 'Cosmo', value: 'cosmo'	},
 				{ name: 'Cyborg', value: 'cyborg' },
@@ -162,17 +161,17 @@ settingsController.get = function (req, res, callback) {
 				};
 			});
 
-			userData.disableCustomUserSkins = parseInt(meta.config.disableCustomUserSkins, 10) === 1;
+			userData.disableCustomUserSkins = meta.config.disableCustomUserSkins;
 
-			userData.allowUserHomePage = parseInt(meta.config.allowUserHomePage, 10) === 1;
+			userData.allowUserHomePage = meta.config.allowUserHomePage;
 
-			userData.hideFullname = parseInt(meta.config.hideFullname, 10) === 1;
-			userData.hideEmail = parseInt(meta.config.hideEmail, 10) === 1;
+			userData.hideFullname = meta.config.hideFullname;
+			userData.hideEmail = meta.config.hideEmail;
 
 			userData.inTopicSearchAvailable = plugins.hasListeners('filter:topic.search');
 
-			userData.maxTopicsPerPage = parseInt(meta.config.maxTopicsPerPage, 10) || 20;
-			userData.maxPostsPerPage = parseInt(meta.config.maxPostsPerPage, 10) || 20;
+			userData.maxTopicsPerPage = meta.config.maxTopicsPerPage;
+			userData.maxPostsPerPage = meta.config.maxPostsPerPage;
 
 			userData.title = '[[pages:account/settings]]';
 			userData.breadcrumbs = helpers.buildBreadcrumbs([{ text: userData.username, url: '/user/' + userData.userslug }, { text: '[[user:settings]]' }]);
@@ -217,6 +216,11 @@ function getNotificationSettings(userData, callback) {
 					notificationemail: setting === 'notificationemail',
 				};
 			}
+
+			if (meta.config.disableChat) {
+				results.types = results.types.filter(type => type !== 'notificationType_new-chat');
+			}
+
 			var notificationSettings = results.types.map(modifyType).concat(results.privilegedTypes.map(modifyType));
 			next(null, notificationSettings);
 		},

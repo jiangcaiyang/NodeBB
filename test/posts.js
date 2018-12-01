@@ -73,6 +73,14 @@ describe('Post\'s', function () {
 		});
 	});
 
+	it('should return falsy if post does not exist', function (done) {
+		posts.getPostData(9999, function (err, postData) {
+			assert.ifError(err);
+			assert.equal(postData, null);
+			done();
+		});
+	});
+
 	describe('voting', function () {
 		it('should fail to upvote post if group does not have upvote permission', function (done) {
 			privileges.categories.rescind(['posts:upvote', 'posts:downvote'], cid, 'registered-users', function (err) {
@@ -251,7 +259,7 @@ describe('Post\'s', function () {
 				assert.ifError(err);
 				posts.getPostField(replyPid, 'deleted', function (err, isDeleted) {
 					assert.ifError(err);
-					assert.equal(parseInt(isDeleted, 10), 1);
+					assert.strictEqual(isDeleted, 1);
 					done();
 				});
 			});
@@ -262,7 +270,7 @@ describe('Post\'s', function () {
 				assert.ifError(err);
 				posts.getPostField(replyPid, 'deleted', function (err, isDeleted) {
 					assert.ifError(err);
-					assert.equal(parseInt(isDeleted, 10), 0);
+					assert.strictEqual(isDeleted, 0);
 					done();
 				});
 			});
@@ -273,10 +281,10 @@ describe('Post\'s', function () {
 				assert.ifError(err);
 				posts.getPostField(replyPid, 'deleted', function (err, deleted) {
 					assert.ifError(err);
-					assert.equal(parseInt(deleted, 10), 1);
+					assert.strictEqual(deleted, 1);
 					posts.getPostField(mainPid, 'deleted', function (err, deleted) {
 						assert.ifError(err);
-						assert.equal(parseInt(deleted, 10), 1);
+						assert.strictEqual(deleted, 1);
 						done();
 					});
 				});
@@ -290,7 +298,7 @@ describe('Post\'s', function () {
 					assert.ifError(err);
 					topics.getTopicField(data.topicData.tid, 'deleted', function (err, deleted) {
 						assert.ifError(err);
-						assert.equal(parseInt(deleted, 10), 1);
+						assert.strictEqual(deleted, 1);
 						done();
 					});
 				});
@@ -364,7 +372,7 @@ describe('Post\'s', function () {
 		});
 
 		it('should error if title is too long', function (done) {
-			var longTitle = new Array(parseInt(meta.config.maximumTitleLength, 10) + 2).join('a');
+			var longTitle = new Array(meta.config.maximumTitleLength + 2).join('a');
 			socketPosts.edit({ uid: voterUid }, { pid: pid, content: 'edited post content', title: longTitle }, function (err) {
 				assert.equal(err.message, '[[error:title-too-long, ' + meta.config.maximumTitleLength + ']]');
 				done();
@@ -400,7 +408,7 @@ describe('Post\'s', function () {
 		});
 
 		it('should error if content is too long', function (done) {
-			var longContent = new Array(parseInt(meta.config.maximumPostLength, 10) + 2).join('a');
+			var longContent = new Array(meta.config.maximumPostLength + 2).join('a');
 			socketPosts.edit({ uid: voterUid }, { pid: pid, content: longContent }, function (err) {
 				assert.equal(err.message, '[[error:content-too-long, ' + meta.config.maximumPostLength + ']]');
 				done();
@@ -591,6 +599,14 @@ describe('Post\'s', function () {
 	});
 
 	describe('parse', function () {
+		it('should not crash and return falsy if post data is falsy', function (done) {
+			posts.parsePost(null, function (err, postData) {
+				assert.ifError(err);
+				assert.strictEqual(postData, null);
+				done();
+			});
+		});
+
 		it('should store post content in cache', function (done) {
 			var oldValue = global.env;
 			global.env = 'production';

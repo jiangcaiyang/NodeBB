@@ -7,6 +7,8 @@ var path = require('path');
 var prompt = require('prompt');
 var winston = require('winston');
 var nconf = require('nconf');
+var _ = require('lodash');
+
 var utils = require('./utils.js');
 
 var install = module.exports;
@@ -390,14 +392,14 @@ function giveGlobalPrivileges(next) {
 
 function createCategories(next) {
 	var Categories = require('./categories');
-
-	Categories.getAllCategories(0, function (err, categoryData) {
+	var db = require('./database');
+	db.getSortedSetRange('categories:cid', 0, -1, function (err, cids) {
 		if (err) {
 			return next(err);
 		}
 
-		if (Array.isArray(categoryData) && categoryData.length) {
-			console.log('Categories OK. Found ' + categoryData.length + ' categories.');
+		if (Array.isArray(cids) && cids.length) {
+			console.log('Categories OK. Found ' + cids.length + ' categories.');
 			return next();
 		}
 
@@ -488,9 +490,7 @@ function enableDefaultPlugins(next) {
 		}
 	}
 
-	defaultEnabled = defaultEnabled.filter(function (plugin, index, array) {
-		return array.indexOf(plugin) === index;
-	});
+	defaultEnabled = _.uniq(defaultEnabled);
 
 	winston.info('[install/enableDefaultPlugins] activating default plugins', defaultEnabled);
 

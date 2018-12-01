@@ -64,16 +64,19 @@ module.exports = function (User) {
 	};
 
 	User.isBanned = function (uid, callback) {
+		if (parseInt(uid, 10) <= 0) {
+			return setImmediate(callback, null, false);
+		}
 		async.waterfall([
 			async.apply(User.getUserFields, uid, ['banned', 'banned:expire']),
 			function (userData, next) {
-				var banned = userData && parseInt(userData.banned, 10) === 1;
+				var banned = userData && userData.banned;
 				if (!banned) {
 					return next(null, banned);
 				}
 
 				// If they are banned, see if the ban has expired
-				var stillBanned = !parseInt(userData['banned:expire'], 10) || Date.now() < parseInt(userData['banned:expire'], 10);
+				var stillBanned = !userData['banned:expire'] || Date.now() < userData['banned:expire'];
 
 				if (stillBanned) {
 					return next(null, true);
@@ -90,6 +93,9 @@ module.exports = function (User) {
 	};
 
 	User.getBannedReason = function (uid, callback) {
+		if (parseInt(uid, 10) <= 0) {
+			return setImmediate(callback, null, '');
+		}
 		async.waterfall([
 			function (next) {
 				db.getSortedSetRevRange('uid:' + uid + ':bans:timestamp', 0, 0, next);

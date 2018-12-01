@@ -5,11 +5,9 @@ var passport = require('passport');
 var passportLocal = require('passport-local').Strategy;
 var nconf = require('nconf');
 var winston = require('winston');
-var express = require('express');
 
 var controllers = require('../controllers');
 var plugins = require('../plugins');
-var hotswap = require('../hotswap');
 
 var loginStrategies = [];
 
@@ -28,10 +26,10 @@ Auth.initialize = function (app, middleware) {
 Auth.setAuthVars = function (req, res, next) {
 	var isSpider = req.isSpider();
 	req.loggedIn = !isSpider && !!req.user;
-	if (isSpider) {
-		req.uid = -1;
-	} else if (req.user) {
+	if (req.user) {
 		req.uid = parseInt(req.user.uid, 10);
+	} else if (isSpider) {
+		req.uid = -1;
 	} else {
 		req.uid = 0;
 	}
@@ -42,10 +40,7 @@ Auth.getLoginStrategies = function () {
 	return loginStrategies;
 };
 
-Auth.reloadRoutes = function (callback) {
-	var router = express.Router();
-	router.hotswapId = 'auth';
-
+Auth.reloadRoutes = function (router, callback) {
 	loginStrategies.length = 0;
 
 	if (plugins.hasListeners('action:auth.overrideLogin')) {
@@ -60,6 +55,7 @@ Auth.reloadRoutes = function (callback) {
 			plugins.fireHook('filter:auth.init', loginStrategies, next);
 		},
 		function (loginStrategies, next) {
+			loginStrategies = loginStrategies || [];
 			loginStrategies.forEach(function (strategy) {
 				if (strategy.url) {
 					router.get(strategy.url, Auth.middleware.applyCSRF, function (req, res, next) {
@@ -78,6 +74,9 @@ Auth.reloadRoutes = function (callback) {
 				}, function (req, res, next) {
 					// Trigger registration interstitial checks
 					req.session.registration = req.session.registration || {};
+					// save returnTo for later usage in /register/complete
+					// passport seems to remove `req.session.returnTo` after it redirects
+					req.session.registration.returnTo = req.session.returnTo;
 					next();
 				}, passport.authenticate(strategy.name, {
 					successReturnToOrRedirect: nconf.get('relative_path') + (strategy.successUrl !== undefined ? strategy.successUrl : '/'),
@@ -87,12 +86,10 @@ Auth.reloadRoutes = function (callback) {
 
 			router.post('/register', Auth.middleware.applyCSRF, Auth.middleware.applyBlacklist, controllers.authentication.register);
 			router.post('/register/complete', Auth.middleware.applyCSRF, Auth.middleware.applyBlacklist, controllers.authentication.registerComplete);
-			// router.get('/register/abort', controllers.authentication.registerAbort);
 			router.post('/register/abort', controllers.authentication.registerAbort);
 			router.post('/login', Auth.middleware.applyCSRF, Auth.middleware.applyBlacklist, controllers.authentication.login);
 			router.post('/logout', Auth.middleware.applyCSRF, controllers.authentication.logout);
 
-			hotswap.replace('auth', router);
 			next();
 		},
 	], callback);

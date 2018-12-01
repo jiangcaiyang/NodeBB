@@ -19,11 +19,7 @@
 
 'use strict';
 
-if (require.main !== module) {
-	require.main.require = function (path) {
-		return require(path);
-	};
-}
+require('./require-main');
 
 var nconf = require('nconf');
 nconf.argv().env({
@@ -93,4 +89,3 @@ if (nconf.get('setup') || nconf.get('install')) {
 } else {
 	require('./src/start').start();
 }
-

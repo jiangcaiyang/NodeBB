@@ -5,20 +5,17 @@ var path = require('path');
 var async = require('async');
 var winston = require('winston');
 var semver = require('semver');
-var express = require('express');
 var nconf = require('nconf');
-
-var hotswap = require('./hotswap');
 
 var app;
 var middleware;
 
 var Plugins = module.exports;
 
-require('./plugins/install')(Plugins);
-require('./plugins/load')(Plugins);
-require('./plugins/hooks')(Plugins);
-Plugins.data = require('./plugins/data');
+require('./install')(Plugins);
+require('./load')(Plugins);
+require('./hooks')(Plugins);
+Plugins.data = require('./data');
 
 Plugins.getPluginPaths = Plugins.data.getPluginPaths;
 Plugins.loadPluginInfo = Plugins.data.loadPluginInfo;
@@ -39,6 +36,28 @@ Plugins.languageData = {};
 
 Plugins.initialized = false;
 
+var defaultRequire = module.require;
+
+module.require = function (p) {
+	try {
+		return defaultRequire.apply(module, arguments);
+	} catch (err) {
+		// if we can't find the module try in parent directory
+		// since plugins.js moved into plugins folder
+		if (err.code === 'MODULE_NOT_FOUND') {
+			let stackLine = err.stack.split('\n');
+			stackLine = stackLine.find(line => line.includes('nodebb-plugin') || line.includes('nodebb-theme'));
+			var deprecatedPath = err.message.replace('Cannot find module ', '');
+			winston.warn('[deprecated] requiring core modules with `module.parent.require(' + deprecatedPath + ')` is deprecated. Please use `require.main.require("./src/<module_name>")` instead.\n' + stackLine);
+			if (path.isAbsolute(p)) {
+				throw err;
+			}
+			return defaultRequire.apply(module, [path.join('../', p)]);
+		}
+		throw err;
+	}
+};
+
 Plugins.requireLibrary = function (pluginID, libraryPath) {
 	Plugins.libraries[pluginID] = require(libraryPath);
 	Plugins.libraryPaths.push(libraryPath);
@@ -53,7 +72,6 @@ Plugins.init = function (nbbApp, nbbMiddleware, callback) {
 	if (nbbApp) {
 		app = nbbApp;
 		middleware = nbbMiddleware;
-		hotswap.prepare(nbbApp);
 	}
 
 	if (global.env === 'development') {
@@ -116,22 +134,14 @@ Plugins.reload = function (callback) {
 	], callback);
 };
 
-Plugins.reloadRoutes = function (callback) {
-	var router = express.Router();
-
-	router.hotswapId = 'plugins';
-	router.render = function () {
-		app.render.apply(app, arguments);
-	};
-
-	var controllers = require('./controllers');
+Plugins.reloadRoutes = function (router, callback) {
+	var controllers = require('../controllers');
 	Plugins.fireHook('static:app.load', { app: app, router: router, middleware: middleware, controllers: controllers }, function (err) {
 		if (err) {
 			winston.error('[plugins] Encountered error while executing post-router plugins hooks', err);
 			return callback(err);
 		}
 
-		hotswap.replace('plugins', router);
 		winston.verbose('[plugins] All plugins reloaded and rerouted');
 		callback();
 	});
@@ -255,7 +265,7 @@ Plugins.normalise = function (apiReturn, callback) {
 	});
 };
 
-Plugins.nodeModulesPath = path.join(__dirname, '../node_modules');
+Plugins.nodeModulesPath = path.join(__dirname, '../../node_modules');
 
 Plugins.showInstalled = function (callback) {
 	var pluginNamePattern = /^(@.*?\/)?nodebb-(theme|plugin|widget|rewards)-.*$/;
@@ -357,3 +367,5 @@ Plugins.showInstalled = function (callback) {
 		},
 	], callback);
 };
+
+Plugins.async = require('../promisify')(Plugins);

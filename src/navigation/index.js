@@ -5,14 +5,11 @@ var nconf = require('nconf');
 
 var admin = require('./admin');
 var translator = require('../translator');
+const groups = require('../groups');
 
 var navigation = module.exports;
 
-navigation.get = function (callback) {
-	if (admin.cache) {
-		return callback(null, admin.cache);
-	}
-
+navigation.get = function (uid, callback) {
 	async.waterfall([
 		admin.get,
 		function (data, next) {
@@ -32,9 +29,12 @@ navigation.get = function (callback) {
 				return item;
 			});
 
-			admin.cache = data;
-
-			next(null, data);
+			async.filter(data, function (navItem, next) {
+				if (!navItem.groups.length) {
+					return setImmediate(next, null, true);
+				}
+				groups.isMemberOfAny(uid, navItem.groups, next);
+			}, next);
 		},
 	], callback);
 };

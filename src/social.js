@@ -1,8 +1,8 @@
 'use strict';
 
+var async = require('async');
 var plugins = require('./plugins');
 var db = require('./database');
-var async = require('async');
 
 var social = module.exports;
 
@@ -10,7 +10,7 @@ social.postSharing = null;
 
 social.getPostSharing = function (callback) {
 	if (social.postSharing) {
-		return callback(null, social.postSharing);
+		return setImmediate(callback, null, social.postSharing);
 	}
 
 	var networks = [
@@ -39,8 +39,8 @@ social.getPostSharing = function (callback) {
 			db.getSetMembers('social:posts.activated', next);
 		},
 		function (activated, next) {
-			networks.forEach(function (network, i) {
-				networks[i].activated = (activated.indexOf(network.id) !== -1);
+			networks.forEach(function (network) {
+				network.activated = activated.includes(network.id);
 			});
 
 			social.postSharing = networks;
@@ -55,9 +55,7 @@ social.getActivePostSharing = function (callback) {
 			social.getPostSharing(next);
 		},
 		function (networks, next) {
-			networks = networks.filter(function (network) {
-				return network && network.activated;
-			});
+			networks = networks.filter(network => network && network.activated);
 			next(null, networks);
 		},
 	], callback);

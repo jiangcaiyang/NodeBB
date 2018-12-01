@@ -90,7 +90,7 @@ Flags.get = function (flagId, callback) {
 			// Second stage
 			async.parallel({
 				userObj: async.apply(user.getUserFields, data.base.uid, ['username', 'userslug', 'picture', 'reputation']),
-				targetObj: async.apply(Flags.getTarget, data.base.type, data.base.targetId, data.base.uid),
+				targetObj: async.apply(Flags.getTarget, data.base.type, data.base.targetId, 0),
 			}, function (err, payload) {
 				// Final object return construction
 				next(err, Object.assign(data.base, {
@@ -246,7 +246,7 @@ Flags.validate = function (payload, callback) {
 
 		if (data.target.deleted) {
 			return callback(new Error('[[error:post-deleted]]'));
-		} else if (parseInt(data.reporter.banned, 10)) {
+		} else if (data.reporter.banned) {
 			return callback(new Error('[[error:user-banned]]'));
 		}
 
@@ -257,9 +257,8 @@ Flags.validate = function (payload, callback) {
 					return callback(err);
 				}
 
-				var minimumReputation = utils.isNumber(meta.config['min:rep:flag']) ? parseInt(meta.config['min:rep:flag'], 10) : 0;
 				// Check if reporter meets rep threshold (or can edit the target post, in which case threshold does not apply)
-				if (!editable.flag && parseInt(data.reporter.reputation, 10) < minimumReputation) {
+				if (!editable.flag && data.reporter.reputation < meta.config['min:rep:flag']) {
 					return callback(new Error('[[error:not-enough-reputation-to-flag]]'));
 				}
 
@@ -273,9 +272,8 @@ Flags.validate = function (payload, callback) {
 					return callback(err);
 				}
 
-				var minimumReputation = utils.isNumber(meta.config['min:rep:flag']) ? parseInt(meta.config['min:rep:flag'], 10) : 0;
 				// Check if reporter meets rep threshold (or can edit the target user, in which case threshold does not apply)
-				if (!editable && parseInt(data.reporter.reputation, 10) < minimumReputation) {
+				if (!editable && data.reporter.reputation < meta.config['min:rep:flag']) {
 					return callback(new Error('[[error:not-enough-reputation-to-flag]]'));
 				}
 

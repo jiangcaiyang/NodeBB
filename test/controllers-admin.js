@@ -145,6 +145,15 @@ describe('Admin Controllers', function () {
 		});
 	});
 
+	it('should load user settings page', function (done) {
+		request(nconf.get('url') + '/admin/settings/user', { jar: jar }, function (err, res, body) {
+			assert.ifError(err);
+			assert.equal(res.statusCode, 200);
+			assert(body);
+			done();
+		});
+	});
+
 	it('should load info page for a user', function (done) {
 		request(nconf.get('url') + '/api/user/regular/info', { jar: jar, json: true }, function (err, res, body) {
 			assert.ifError(err);
@@ -204,6 +213,7 @@ describe('Admin Controllers', function () {
 	it('should load /admin/manage/users', function (done) {
 		request(nconf.get('url') + '/api/admin/manage/users', { jar: jar, json: true }, function (err, res, body) {
 			assert.ifError(err);
+			assert.equal(res.statusCode, 200);
 			assert(body);
 			done();
 		});
@@ -212,6 +222,7 @@ describe('Admin Controllers', function () {
 	it('should load /admin/manage/users/search', function (done) {
 		request(nconf.get('url') + '/api/admin/manage/users/search', { jar: jar, json: true }, function (err, res, body) {
 			assert.ifError(err);
+			assert.equal(res.statusCode, 200);
 			assert(body.users);
 			done();
 		});
@@ -220,6 +231,7 @@ describe('Admin Controllers', function () {
 	it('should load /admin/manage/users/not-validated', function (done) {
 		request(nconf.get('url') + '/api/admin/manage/users/not-validated', { jar: jar, json: true }, function (err, res, body) {
 			assert.ifError(err);
+			assert.equal(res.statusCode, 200);
 			assert(body);
 			done();
 		});
@@ -228,6 +240,7 @@ describe('Admin Controllers', function () {
 	it('should load /admin/manage/users/no-posts', function (done) {
 		request(nconf.get('url') + '/api/admin/manage/users/no-posts', { jar: jar, json: true }, function (err, res, body) {
 			assert.ifError(err);
+			assert.equal(res.statusCode, 200);
 			assert(body);
 			done();
 		});
@@ -236,6 +249,7 @@ describe('Admin Controllers', function () {
 	it('should load /admin/manage/users/top-posters', function (done) {
 		request(nconf.get('url') + '/api/admin/manage/users/top-posters', { jar: jar, json: true }, function (err, res, body) {
 			assert.ifError(err);
+			assert.equal(res.statusCode, 200);
 			assert(body);
 			done();
 		});
@@ -244,6 +258,7 @@ describe('Admin Controllers', function () {
 	it('should load /admin/manage/users/most-reputation', function (done) {
 		request(nconf.get('url') + '/api/admin/manage/users/most-reputation', { jar: jar, json: true }, function (err, res, body) {
 			assert.ifError(err);
+			assert.equal(res.statusCode, 200);
 			assert(body);
 			done();
 		});
@@ -252,6 +267,7 @@ describe('Admin Controllers', function () {
 	it('should load /admin/manage/users/inactive', function (done) {
 		request(nconf.get('url') + '/api/admin/manage/users/inactive', { jar: jar, json: true }, function (err, res, body) {
 			assert.ifError(err);
+			assert.equal(res.statusCode, 200);
 			assert(body);
 			done();
 		});
@@ -260,6 +276,7 @@ describe('Admin Controllers', function () {
 	it('should load /admin/manage/users/flagged', function (done) {
 		request(nconf.get('url') + '/api/admin/manage/users/flagged', { jar: jar, json: true }, function (err, res, body) {
 			assert.ifError(err);
+			assert.equal(res.statusCode, 200);
 			assert(body);
 			done();
 		});
@@ -268,6 +285,7 @@ describe('Admin Controllers', function () {
 	it('should load /admin/manage/users/banned', function (done) {
 		request(nconf.get('url') + '/api/admin/manage/users/banned', { jar: jar, json: true }, function (err, res, body) {
 			assert.ifError(err);
+			assert.equal(res.statusCode, 200);
 			assert(body);
 			done();
 		});
@@ -276,6 +294,7 @@ describe('Admin Controllers', function () {
 	it('should load /admin/manage/registration', function (done) {
 		request(nconf.get('url') + '/api/admin/manage/registration', { jar: jar, json: true }, function (err, res, body) {
 			assert.ifError(err);
+			assert.equal(res.statusCode, 200);
 			assert(body);
 			done();
 		});
@@ -284,6 +303,7 @@ describe('Admin Controllers', function () {
 	it('should load /admin/manage/admins-mods', function (done) {
 		request(nconf.get('url') + '/api/admin/manage/admins-mods', { jar: jar, json: true }, function (err, res, body) {
 			assert.ifError(err);
+			assert.equal(res.statusCode, 200);
 			assert(body);
 			done();
 		});
@@ -326,9 +346,10 @@ describe('Admin Controllers', function () {
 		});
 	});
 
-	it('should load /admin/manage/flags', function (done) {
-		request(nconf.get('url') + '/api/admin/manage/flags', { jar: jar, json: true }, function (err, res, body) {
+	it('should load /admin/advanced/hooks', function (done) {
+		request(nconf.get('url') + '/api/admin/advanced/hooks', { jar: jar, json: true }, function (err, res, body) {
 			assert.ifError(err);
+			assert.equal(res.statusCode, 200);
 			assert(body);
 			done();
 		});
@@ -337,6 +358,7 @@ describe('Admin Controllers', function () {
 	it('should load /admin/advanced/cache', function (done) {
 		request(nconf.get('url') + '/api/admin/advanced/cache', { jar: jar, json: true }, function (err, res, body) {
 			assert.ifError(err);
+			assert.equal(res.statusCode, 200);
 			assert(body);
 			done();
 		});
@@ -345,6 +367,7 @@ describe('Admin Controllers', function () {
 	it('should load /admin/advanced/errors', function (done) {
 		request(nconf.get('url') + '/api/admin/advanced/errors', { jar: jar, json: true }, function (err, res, body) {
 			assert.ifError(err);
+			assert.equal(res.statusCode, 200);
 			assert(body);
 			done();
 		});
@@ -353,16 +376,22 @@ describe('Admin Controllers', function () {
 	it('should load /admin/advanced/errors/export', function (done) {
 		request(nconf.get('url') + '/api/admin/advanced/errors/export', { jar: jar }, function (err, res, body) {
 			assert.ifError(err);
+			assert.equal(res.statusCode, 200);
 			assert(body);
 			done();
 		});
 	});
 
 	it('should load /admin/advanced/logs', function (done) {
-		request(nconf.get('url') + '/api/admin/advanced/logs', { jar: jar, json: true }, function (err, res, body) {
+		var fs = require('fs');
+		fs.appendFile(meta.logs.path, 'dummy log', function (err) {
 			assert.ifError(err);
-			assert(body);
-			done();
+			request(nconf.get('url') + '/api/admin/advanced/logs', { jar: jar, json: true }, function (err, res, body) {
+				assert.ifError(err);
+				assert.equal(res.statusCode, 200);
+				assert(body);
+				done();
+			});
 		});
 	});
 
@@ -385,6 +414,7 @@ describe('Admin Controllers', function () {
 	it('should load /admin/development/info', function (done) {
 		request(nconf.get('url') + '/api/admin/development/info', { jar: jar, json: true }, function (err, res, body) {
 			assert.ifError(err);
+			assert.equal(res.statusCode, 200);
 			assert(body);
 			done();
 		});
@@ -393,6 +423,7 @@ describe('Admin Controllers', function () {
 	it('should load /admin/development/logger', function (done) {
 		request(nconf.get('url') + '/api/admin/development/logger', { jar: jar, json: true }, function (err, res, body) {
 			assert.ifError(err);
+			assert.equal(res.statusCode, 200);
 			assert(body);
 			done();
 		});
@@ -401,6 +432,7 @@ describe('Admin Controllers', function () {
 	it('should load /admin/advanced/events', function (done) {
 		request(nconf.get('url') + '/api/admin/advanced/events', { jar: jar, json: true }, function (err, res, body) {
 			assert.ifError(err);
+			assert.equal(res.statusCode, 200);
 			assert(body);
 			done();
 		});
@@ -409,6 +441,7 @@ describe('Admin Controllers', function () {
 	it('should load /admin/general/sounds', function (done) {
 		request(nconf.get('url') + '/api/admin/general/sounds', { jar: jar, json: true }, function (err, res, body) {
 			assert.ifError(err);
+			assert.equal(res.statusCode, 200);
 			assert(body);
 			done();
 		});
@@ -417,6 +450,7 @@ describe('Admin Controllers', function () {
 	it('should load /admin/manage/categories', function (done) {
 		request(nconf.get('url') + '/api/admin/manage/categories', { jar: jar, json: true }, function (err, res, body) {
 			assert.ifError(err);
+			assert.equal(res.statusCode, 200);
 			assert(body);
 			done();
 		});
@@ -425,6 +459,7 @@ describe('Admin Controllers', function () {
 	it('should load /admin/manage/categories/1', function (done) {
 		request(nconf.get('url') + '/api/admin/manage/categories/1', { jar: jar, json: true }, function (err, res, body) {
 			assert.ifError(err);
+			assert.equal(res.statusCode, 200);
 			assert(body);
 			done();
 		});
@@ -433,6 +468,7 @@ describe('Admin Controllers', function () {
 	it('should load /admin/manage/categories/1/analytics', function (done) {
 		request(nconf.get('url') + '/api/admin/manage/categories/1/analytics', { jar: jar, json: true }, function (err, res, body) {
 			assert.ifError(err);
+			assert.equal(res.statusCode, 200);
 			assert(body);
 			done();
 		});
@@ -441,6 +477,7 @@ describe('Admin Controllers', function () {
 	it('should load /admin/extend/rewards', function (done) {
 		request(nconf.get('url') + '/api/admin/extend/rewards', { jar: jar, json: true }, function (err, res, body) {
 			assert.ifError(err);
+			assert.equal(res.statusCode, 200);
 			assert(body);
 			done();
 		});
@@ -449,6 +486,7 @@ describe('Admin Controllers', function () {
 	it('should load /admin/extend/widgets', function (done) {
 		request(nconf.get('url') + '/api/admin/extend/widgets', { jar: jar, json: true }, function (err, res, body) {
 			assert.ifError(err);
+			assert.equal(res.statusCode, 200);
 			assert(body);
 			done();
 		});
@@ -457,6 +495,7 @@ describe('Admin Controllers', function () {
 	it('should load /admin/general/languages', function (done) {
 		request(nconf.get('url') + '/api/admin/general/languages', { jar: jar, json: true }, function (err, res, body) {
 			assert.ifError(err);
+			assert.equal(res.statusCode, 200);
 			assert(body);
 			done();
 		});
@@ -472,9 +511,9 @@ describe('Admin Controllers', function () {
 				body = body.posts.map(function (network) {
 					return network && network.id;
 				});
-				assert(body.indexOf('facebook') !== -1);
-				assert(body.indexOf('twitter') !== -1);
-				assert(body.indexOf('google') !== -1);
+				assert(body.includes('facebook'));
+				assert(body.includes('twitter'));
+				assert(body.includes('google'));
 				done();
 			});
 		});
@@ -483,6 +522,7 @@ describe('Admin Controllers', function () {
 	it('should load /admin/manage/tags', function (done) {
 		request(nconf.get('url') + '/api/admin/manage/tags', { jar: jar, json: true }, function (err, res, body) {
 			assert.ifError(err);
+			assert.equal(res.statusCode, 200);
 			assert(body);
 			done();
 		});
@@ -491,6 +531,7 @@ describe('Admin Controllers', function () {
 	it('should load /admin/manage/post-queue', function (done) {
 		request(nconf.get('url') + '/api/admin/manage/post-queue', { jar: jar, json: true }, function (err, res, body) {
 			assert.ifError(err);
+			assert.equal(res.statusCode, 200);
 			assert(body);
 			done();
 		});
@@ -508,6 +549,7 @@ describe('Admin Controllers', function () {
 	it('should load /post-queue', function (done) {
 		request(nconf.get('url') + '/api/post-queue', { jar: jar, json: true }, function (err, res, body) {
 			assert.ifError(err);
+			assert.equal(res.statusCode, 200);
 			assert(body);
 			done();
 		});
@@ -516,6 +558,7 @@ describe('Admin Controllers', function () {
 	it('should load /admin/manage/ip-blacklist', function (done) {
 		request(nconf.get('url') + '/api/admin/manage/ip-blacklist', { jar: jar, json: true }, function (err, res, body) {
 			assert.ifError(err);
+			assert.equal(res.statusCode, 200);
 			assert(body);
 			done();
 		});
@@ -533,6 +576,7 @@ describe('Admin Controllers', function () {
 	it('should load /ip-blacklist', function (done) {
 		request(nconf.get('url') + '/api/ip-blacklist', { jar: jar, json: true }, function (err, res, body) {
 			assert.ifError(err);
+			assert.equal(res.statusCode, 200);
 			assert(body);
 			done();
 		});
@@ -541,6 +585,7 @@ describe('Admin Controllers', function () {
 	it('should load /admin/appearance/themes', function (done) {
 		request(nconf.get('url') + '/api/admin/appearance/themes', { jar: jar, json: true }, function (err, res, body) {
 			assert.ifError(err);
+			assert.equal(res.statusCode, 200);
 			assert(body);
 			done();
 		});
@@ -549,6 +594,7 @@ describe('Admin Controllers', function () {
 	it('should load /admin/appearance/customise', function (done) {
 		request(nconf.get('url') + '/api/admin/appearance/customise', { jar: jar, json: true }, function (err, res, body) {
 			assert.ifError(err);
+			assert.equal(res.statusCode, 200);
 			assert(body);
 			done();
 		});
@@ -561,15 +607,6 @@ describe('Admin Controllers', function () {
 			assert.equal(res.statusCode, 200);
 			assert(body);
 			meta.config.maintenanceMode = 0;
-			done();
-		});
-	});
-
-
-	it('should load /posts/flags', function (done) {
-		request(nconf.get('url') + '/api/posts/flags', { jar: jar, json: true }, function (err, res, body) {
-			assert.ifError(err);
-			assert(body);
 			done();
 		});
 	});
@@ -656,16 +693,16 @@ describe('Admin Controllers', function () {
 			assert.ifError(err);
 			assert.equal(res.statusCode, 200);
 			assert(body);
-			assert(body.indexOf('"someValue":"\\\\"foo\\\\""') !== -1);
-			assert(body.indexOf('"otherValue":"\\\'123\\\'"') !== -1);
-			assert(body.indexOf('"script":"<\\/script>"') !== -1);
+			assert(body.includes('"someValue":"\\\\"foo\\\\""'));
+			assert(body.includes('"otherValue":"\\\'123\\\'"'));
+			assert(body.includes('"script":"<\\/script>"'));
 			request(nconf.get('url'), { jar: jar }, function (err, res, body) {
 				assert.ifError(err);
 				assert.equal(res.statusCode, 200);
 				assert(body);
-				assert(body.indexOf('"someValue":"\\\\"foo\\\\""') !== -1);
-				assert(body.indexOf('"otherValue":"\\\'123\\\'"') !== -1);
-				assert(body.indexOf('"script":"<\\/script>"') !== -1);
+				assert(body.includes('"someValue":"\\\\"foo\\\\""'));
+				assert(body.includes('"otherValue":"\\\'123\\\'"'));
+				assert(body.includes('"script":"<\\/script>"'));
 				plugins.unregisterHook('somePlugin', 'filter:config.get', onConfigGet);
 				done();
 			});

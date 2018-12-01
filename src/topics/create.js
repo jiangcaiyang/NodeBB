@@ -226,11 +226,11 @@ module.exports = function (Topics) {
 					return next(new Error('[[error:no-topic]]'));
 				}
 
-				if (parseInt(results.topicData.locked, 10) === 1 && !results.isAdminOrMod) {
+				if (results.topicData.locked && !results.isAdminOrMod) {
 					return next(new Error('[[error:topic-locked]]'));
 				}
 
-				if (parseInt(results.topicData.deleted, 10) === 1 && !results.isAdminOrMod) {
+				if (results.topicData.deleted && !results.isAdminOrMod) {
 					return next(new Error('[[error:topic-deleted]]'));
 				}
 
@@ -311,10 +311,10 @@ module.exports = function (Topics) {
 			function (results, next) {
 				postData.user = results.userInfo[0];
 				postData.topic = results.topicInfo;
-				postData.index = parseInt(results.topicInfo.postcount, 10) - 1;
+				postData.index = results.topicInfo.postcount - 1;
 
 				// Username override for guests, if enabled
-				if (parseInt(meta.config.allowGuestHandles, 10) === 1 && parseInt(postData.uid, 10) === 0 && data.handle) {
+				if (meta.config.allowGuestHandles && postData.uid === 0 && data.handle) {
 					postData.user.username = validator.escape(String(data.handle));
 				}
 
@@ -348,7 +348,7 @@ module.exports = function (Topics) {
 	}
 
 	function guestHandleValid(data, callback) {
-		if (parseInt(meta.config.allowGuestHandles, 10) === 1 && parseInt(data.uid, 10) === 0 && data.handle) {
+		if (meta.config.allowGuestHandles && parseInt(data.uid, 10) === 0 && data.handle) {
 			if (data.handle.length > meta.config.maximumUsernameLength) {
 				return callback(new Error('[[error:guest-handle-invalid]]'));
 			}

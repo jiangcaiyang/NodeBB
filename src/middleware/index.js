@@ -28,6 +28,10 @@ var delayCache = LRU({
 
 var middleware = module.exports;
 
+middleware.regexes = {
+	timestampedUpload: /^\d+-.+$/,
+};
+
 middleware.applyCSRF = csrf();
 
 middleware.ensureLoggedIn = ensureLoggedIn.ensureLoggedIn(nconf.get('relative_path') + '/login');
@@ -62,10 +66,10 @@ middleware.pageView = function (req, res, next) {
 			user.updateOnlineUsers(req.uid, next);
 		} else {
 			user.updateOnlineUsers(req.uid);
-			next();
+			setImmediate(next);
 		}
 	} else {
-		next();
+		setImmediate(next);
 	}
 };
 
@@ -109,7 +113,7 @@ middleware.routeTouchIcon = function (req, res) {
 };
 
 middleware.privateTagListing = function (req, res, next) {
-	if (!req.loggedIn && parseInt(meta.config.privateTagListing, 10) === 1) {
+	if (!req.loggedIn && meta.config.privateTagListing) {
 		controllers.helpers.notAllowed(req, res);
 	} else {
 		next();
@@ -140,7 +144,7 @@ function expose(exposedField, method, field, req, res, next) {
 }
 
 middleware.privateUploads = function (req, res, next) {
-	if (req.loggedIn || parseInt(meta.config.privateUploads, 10) !== 1) {
+	if (req.loggedIn || !meta.config.privateUploads) {
 		return next();
 	}
 
@@ -156,11 +160,11 @@ middleware.privateUploads = function (req, res, next) {
 };
 
 middleware.busyCheck = function (req, res, next) {
-	if (global.env === 'production' && (!meta.config.hasOwnProperty('eventLoopCheckEnabled') || parseInt(meta.config.eventLoopCheckEnabled, 10) === 1) && toobusy()) {
+	if (global.env === 'production' && meta.config.eventLoopCheckEnabled && toobusy()) {
 		analytics.increment('errors:503');
 		res.status(503).type('text/html').sendFile(path.join(__dirname, '../../public/503.html'));
 	} else {
-		next();
+		setImmediate(next);
 	}
 };
 
@@ -171,7 +175,7 @@ middleware.applyBlacklist = function (req, res, next) {
 };
 
 middleware.processTimeagoLocales = function (req, res, next) {
-	var fallback = req.path.indexOf('-short') === -1 ? 'jquery.timeago.en.js' : 'jquery.timeago.en-short.js';
+	var fallback = !req.path.includes('-short') ? 'jquery.timeago.en.js' : 'jquery.timeago.en-short.js';
 	var localPath = path.join(__dirname, '../../public/vendor/jquery/timeago/locales', req.path);
 
 	async.waterfall([
@@ -204,4 +208,28 @@ middleware.delayLoading = function (req, res, next) {
 	delayCache.set(req.ip, timesSeen += 1);
 
 	setTimeout(next, 1000);
+};
+
+middleware.buildSkinAsset = function (req, res, next) {
+	// If this middleware is reached, a skin was requested, so it is built on-demand
+	var target = path.basename(req.originalUrl).match(/(client-[a-z]+)/);
+	if (target) {
+		async.waterfall([
+			async.apply(plugins.prepareForBuild, ['client side styles']),
+			async.apply(meta.css.buildBundle, target[0], true),
+		], next);
+	} else {
+		setImmediate(next);
+	}
+};
+
+middleware.trimUploadTimestamps = (req, res, next) => {
+	// Check match
+	let basename = path.basename(req.path);
+	if (req.path.startsWith('/uploads/files/') && middleware.regexes.timestampedUpload.test(basename)) {
+		basename = basename.slice(14);
+		res.header('Content-Disposition', 'inline; filename="' + basename + '"');
+	}
+
+	return next();
 };

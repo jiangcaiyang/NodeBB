@@ -145,6 +145,9 @@ define('admin/general/dashboard', ['semver', 'Chart', 'translator', 'benchpress'
 		var t = translator.Translator.create();
 		Promise.all([
 			t.translateKey('admin/general/dashboard:graphs.page-views', []),
+			t.translateKey('admin/general/dashboard:graphs.page-views-registered', []),
+			t.translateKey('admin/general/dashboard:graphs.page-views-guest', []),
+			t.translateKey('admin/general/dashboard:graphs.page-views-bot', []),
 			t.translateKey('admin/general/dashboard:graphs.unique-visitors', []),
 			t.translateKey('admin/general/dashboard:graphs.registered-users', []),
 			t.translateKey('admin/general/dashboard:graphs.anonymous-users', []),
@@ -169,6 +172,36 @@ define('admin/general/dashboard', ['semver', 'Chart', 'translator', 'benchpress'
 					},
 					{
 						label: translations[1],
+						backgroundColor: '#ab464233',
+						borderColor: '#ab4642',
+						pointBackgroundColor: '#ab4642',
+						pointHoverBackgroundColor: '#ab4642',
+						pointBorderColor: '#fff',
+						pointHoverBorderColor: '#ab4642',
+						data: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+					},
+					{
+						label: translations[2],
+						backgroundColor: '#ba8baf33',
+						borderColor: '#ba8baf',
+						pointBackgroundColor: '#ba8baf',
+						pointHoverBackgroundColor: '#ba8baf',
+						pointBorderColor: '#fff',
+						pointHoverBorderColor: '#ba8baf',
+						data: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+					},
+					{
+						label: translations[3],
+						backgroundColor: '#f7ca8833',
+						borderColor: '#f7ca88',
+						pointBackgroundColor: '#f7ca88',
+						pointHoverBackgroundColor: '#f7ca88',
+						pointBorderColor: '#fff',
+						pointHoverBorderColor: '#f7ca88',
+						data: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+					},
+					{
+						label: translations[4],
 						backgroundColor: 'rgba(151,187,205,0.2)',
 						borderColor: 'rgba(151,187,205,1)',
 						pointBackgroundColor: 'rgba(151,187,205,1)',
@@ -183,7 +216,10 @@ define('admin/general/dashboard', ['semver', 'Chart', 'translator', 'benchpress'
 			trafficCanvas.width = $(trafficCanvas).parent().width();
 
 			data.datasets[0].yAxisID = 'left-y-axis';
-			data.datasets[1].yAxisID = 'right-y-axis';
+			data.datasets[1].yAxisID = 'left-y-axis';
+			data.datasets[2].yAxisID = 'left-y-axis';
+			data.datasets[3].yAxisID = 'left-y-axis';
+			data.datasets[4].yAxisID = 'right-y-axis';
 
 			graphs.traffic = new Chart(trafficCtx, {
 				type: 'line',
@@ -191,7 +227,7 @@ define('admin/general/dashboard', ['semver', 'Chart', 'translator', 'benchpress'
 				options: {
 					responsive: true,
 					legend: {
-						display: false,
+						display: true,
 					},
 					scales: {
 						yAxes: [{
@@ -215,7 +251,7 @@ define('admin/general/dashboard', ['semver', 'Chart', 'translator', 'benchpress'
 							position: 'right',
 							scaleLabel: {
 								display: true,
-								labelString: translations[1],
+								labelString: translations[4],
 							},
 						}],
 					},
@@ -228,7 +264,7 @@ define('admin/general/dashboard', ['semver', 'Chart', 'translator', 'benchpress'
 			graphs.registered = new Chart(registeredCtx, {
 				type: 'doughnut',
 				data: {
-					labels: translations.slice(2, 4),
+					labels: translations.slice(5, 7),
 					datasets: [{
 						data: [1, 1],
 						backgroundColor: ['#F7464A', '#46BFBD'],
@@ -246,7 +282,7 @@ define('admin/general/dashboard', ['semver', 'Chart', 'translator', 'benchpress'
 			graphs.presence = new Chart(presenceCtx, {
 				type: 'doughnut',
 				data: {
-					labels: translations.slice(4, 9),
+					labels: translations.slice(7, 12),
 					datasets: [{
 						data: [1, 1, 1, 1, 1],
 						backgroundColor: ['#F7464A', '#46BFBD', '#FDB45C', '#949FB1', '#9FB194'],
@@ -415,7 +451,10 @@ define('admin/general/dashboard', ['semver', 'Chart', 'translator', 'benchpress'
 			}
 
 			graphs.traffic.data.datasets[0].data = data.pageviews;
-			graphs.traffic.data.datasets[1].data = data.uniqueVisitors;
+			graphs.traffic.data.datasets[1].data = data.pageviewsRegistered;
+			graphs.traffic.data.datasets[2].data = data.pageviewsGuest;
+			graphs.traffic.data.datasets[3].data = data.pageviewsBot;
+			graphs.traffic.data.datasets[4].data = data.uniqueVisitors;
 			graphs.traffic.data.labels = graphs.traffic.data.xLabels;
 
 			graphs.traffic.update();
@@ -426,12 +465,19 @@ define('admin/general/dashboard', ['semver', 'Chart', 'translator', 'benchpress'
 	}
 
 	function updateRegisteredGraph(registered, anonymous) {
+		$('#analytics-legend .registered').parent().find('.count').text(registered);
+		$('#analytics-legend .anonymous').parent().find('.count').text(anonymous);
 		graphs.registered.data.datasets[0].data[0] = registered;
 		graphs.registered.data.datasets[0].data[1] = anonymous;
 		graphs.registered.update();
 	}
 
 	function updatePresenceGraph(users) {
+		$('#analytics-presence-legend .on-categories').parent().find('.count').text(users.categories);
+		$('#analytics-presence-legend .reading-posts').parent().find('.count').text(users.topics);
+		$('#analytics-presence-legend .browsing-topics').parent().find('.count').text(users.category);
+		$('#analytics-presence-legend .recent').parent().find('.count').text(users.recent);
+		$('#analytics-presence-legend .unread').parent().find('.count').text(users.unread);
 		graphs.presence.data.datasets[0].data[0] = users.categories;
 		graphs.presence.data.datasets[0].data[1] = users.topics;
 		graphs.presence.data.datasets[0].data[2] = users.category;
@@ -469,7 +515,7 @@ define('admin/general/dashboard', ['semver', 'Chart', 'translator', 'benchpress'
 
 				html += '<li>' +
 					'<div style="background-color: ' + topicColors[i] + ';"></div>' +
-					'<span>' + label + '</span>' +
+					'<span> (' + topic.count + ') ' + label + '</span>' +
 					'</li>';
 			});
 			legend.translateHtml(html);

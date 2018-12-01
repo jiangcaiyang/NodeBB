@@ -71,6 +71,7 @@ recentController.getData = function (req, url, sort, callback) {
 				filter: filter,
 				term: term,
 				sort: sort,
+				query: req.query,
 			}, next);
 		},
 		function (data, next) {
@@ -78,8 +79,7 @@ recentController.getData = function (req, url, sort, callback) {
 			data.allCategoriesUrl = url + helpers.buildQueryString('', filter, '');
 			data.selectedCategory = categoryData.selectedCategory;
 			data.selectedCids = categoryData.selectedCids;
-			data.nextStart = stop + 1;
-			data['feeds:disableRSS'] = parseInt(meta.config['feeds:disableRSS'], 10) === 1;
+			data['feeds:disableRSS'] = meta.config['feeds:disableRSS'];
 			data.rssFeedUrl = nconf.get('relative_path') + '/' + url + '.rss';
 			if (req.loggedIn) {
 				data.rssFeedUrl += '?uid=' + req.uid + '&token=' + rssToken;

@@ -5,6 +5,7 @@
  * ATTENTION: testing db is flushed before every use!
  */
 
+require('../../require-main');
 
 var async = require('async');
 var path = require('path');
@@ -13,10 +14,9 @@ var url = require('url');
 
 global.env = process.env.TEST_ENV || 'production';
 
-var errorText;
+var winston = require('winston');
 var packageInfo = require('../../package');
 
-var winston = require('winston');
 winston.add(new winston.transports.Console({
 	format: winston.format.combine(
 		winston.format.splat(),
@@ -33,6 +33,10 @@ nconf.defaults({
 	relative_path: '',
 });
 
+var urlObject = url.parse(nconf.get('url'));
+var relativePath = urlObject.pathname !== '/' ? urlObject.pathname : '';
+nconf.set('relative_path', relativePath);
+
 if (!nconf.get('isCluster')) {
 	nconf.set('isPrimary', 'true');
 	nconf.set('isCluster', 'true');
@@ -43,7 +47,7 @@ var testDbConfig = nconf.get('test_database');
 var productionDbConfig = nconf.get(dbType);
 
 if (!testDbConfig) {
-	errorText = 'test_database is not defined';
+	const errorText = 'test_database is not defined';
 	winston.info(
 		'\n===========================================================\n' +
 		'Please, add parameters for test database in config.json\n' +
@@ -86,7 +90,7 @@ if (!testDbConfig) {
 if (testDbConfig.database === productionDbConfig.database &&
 	testDbConfig.host === productionDbConfig.host &&
 	testDbConfig.port === productionDbConfig.port) {
-	errorText = 'test_database has the same config as production db';
+	const errorText = 'test_database has the same config as production db';
 	winston.error(errorText);
 	throw new Error(errorText);
 }
@@ -175,6 +179,8 @@ function setupMockDefaults(callback) {
 			groups.resetCache();
 			var postCache = require('../../src/posts/cache');
 			postCache.reset();
+			var localCache = require('../../src/cache');
+			localCache.reset();
 			next();
 		},
 		function (next) {
@@ -224,6 +230,7 @@ function setupDefaultConfigs(meta, next) {
 
 	var defaults = require(path.join(nconf.get('base_dir'), 'install/data/defaults.json'));
 	defaults.eventLoopCheckEnabled = 0;
+	defaults.minimumPasswordStrength = 0;
 	meta.configs.setOnEmpty(defaults, next);
 }
 

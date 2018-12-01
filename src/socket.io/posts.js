@@ -24,7 +24,7 @@ require('./posts/tools')(SocketPosts);
 require('./posts/diffs')(SocketPosts);
 
 SocketPosts.reply = function (socket, data, callback) {
-	if (!data || !data.tid || (parseInt(meta.config.minimumPostLength, 10) !== 0 && !data.content)) {
+	if (!data || !data.tid || (meta.config.minimumPostLength !== 0 && !data.content)) {
 		return callback(new Error('[[error:invalid-data]]'));
 	}
 
@@ -57,8 +57,8 @@ function postReply(socket, data, callback) {
 		function (postData, next) {
 			var result = {
 				posts: [postData],
-				'reputation:disabled': parseInt(meta.config['reputation:disabled'], 10) === 1,
-				'downvote:disabled': parseInt(meta.config['downvote:disabled'], 10) === 1,
+				'reputation:disabled': meta.config['reputation:disabled'] === 1,
+				'downvote:disabled': meta.config['downvote:disabled'] === 1,
 			};
 
 			next(null, postData);
@@ -84,10 +84,44 @@ SocketPosts.getRawPost = function (socket, pid, callback) {
 			posts.getPostFields(pid, ['content', 'deleted'], next);
 		},
 		function (postData, next) {
-			if (parseInt(postData.deleted, 10) === 1) {
+			if (postData.deleted) {
 				return next(new Error('[[error:no-post]]'));
 			}
 			next(null, postData.content);
+		},
+	], callback);
+};
+
+SocketPosts.getTimestampByIndex = function (socket, data, callback) {
+	var pid;
+	var db = require('../database');
+
+	async.waterfall([
+		function (next) {
+			if (data.index < 0) {
+				data.index = 0;
+			}
+			if (data.index === 0) {
+				topics.getTopicField(data.tid, 'mainPid', next);
+			} else {
+				db.getSortedSetRange('tid:' + data.tid + ':posts', data.index - 1, data.index - 1, next);
+			}
+		},
+		function (_pid, next) {
+			pid = Array.isArray(_pid) ? _pid[0] : _pid;
+			if (!pid) {
+				return callback(null, 0);
+			}
+			privileges.posts.can('read', pid, socket.uid, next);
+		},
+		function (canRead, next) {
+			if (!canRead) {
+				return next(new Error('[[error:no-privileges]]'));
+			}
+			posts.getPostFields(pid, ['timestamp'], next);
+		},
+		function (postData, next) {
+			next(null, postData.timestamp);
 		},
 	], callback);
 };

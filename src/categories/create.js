@@ -7,6 +7,7 @@ var groups = require('../groups');
 var plugins = require('../plugins');
 var privileges = require('../privileges');
 var utils = require('../utils');
+var cache = require('../cache');
 
 module.exports = function (Categories) {
 	Categories.create = function (data, callback) {
@@ -41,6 +42,7 @@ module.exports = function (Categories) {
 					numRecentReplies: 1,
 					class: (data.class ? data.class : 'col-md-3 col-xs-6'),
 					imageClass: 'cover',
+					isSection: 0,
 				};
 
 				if (data.backgroundImage) {
@@ -81,26 +83,22 @@ module.exports = function (Categories) {
 				], next);
 			},
 			function (results, next) {
-				async.series([
-					function (next) {
-						if (data.cloneFromCid && parseInt(data.cloneFromCid, 10)) {
-							return Categories.copySettingsFrom(data.cloneFromCid, category.cid, !data.parentCid, next);
-						}
+				cache.del(['categories:cid', 'cid:' + parentCid + ':children']);
+				if (data.cloneFromCid && parseInt(data.cloneFromCid, 10)) {
+					return Categories.copySettingsFrom(data.cloneFromCid, category.cid, !data.parentCid, next);
+				}
 
-						next();
-					},
-					function (next) {
-						if (data.cloneChildren) {
-							return duplicateCategoriesChildren(category.cid, data.cloneFromCid, data.uid, next);
-						}
-
-						next();
-					},
-				], function (err) {
-					next(err, category);
-				});
+				next(null, category);
 			},
-			function (category, next) {
+			function (_category, next) {
+				category = _category;
+				if (data.cloneChildren) {
+					return duplicateCategoriesChildren(category.cid, data.cloneFromCid, data.uid, next);
+				}
+
+				next();
+			},
+			function (next) {
 				plugins.fireHook('action:category.create', { category: category });
 				next(null, category);
 			},
@@ -153,12 +151,15 @@ module.exports = function (Categories) {
 
 				var tasks = [];
 
-				if (copyParent && utils.isNumber(destination.parentCid)) {
-					tasks.push(async.apply(db.sortedSetRemove, 'cid:' + destination.parentCid + ':children', toCid));
-				}
-
-				if (copyParent && utils.isNumber(results.source.parentCid)) {
-					tasks.push(async.apply(db.sortedSetAdd, 'cid:' + results.source.parentCid + ':children', results.source.order, toCid));
+				const oldParent = parseInt(destination.parentCid, 10) || 0;
+				const newParent = parseInt(results.source.parentCid, 10) || 0;
+				if (copyParent) {
+					tasks.push(async.apply(db.sortedSetRemove, 'cid:' + oldParent + ':children', toCid));
+					tasks.push(async.apply(db.sortedSetAdd, 'cid:' + newParent + ':children', results.source.order, toCid));
+					tasks.push(function (next) {
+						cache.del(['cid:' + oldParent + ':children', 'cid:' + newParent + ':children']);
+						setImmediate(next);
+					});
 				}
 
 				destination.description = results.source.description;
@@ -180,12 +181,31 @@ module.exports = function (Categories) {
 				async.series(tasks, next);
 			},
 			function (results, next) {
+				copyTagWhitelist(fromCid, toCid, next);
+			},
+			function (next) {
 				Categories.copyPrivilegesFrom(fromCid, toCid, next);
 			},
 		], function (err) {
 			callback(err, destination);
 		});
 	};
+
+	function copyTagWhitelist(fromCid, toCid, callback) {
+		var data;
+		async.waterfall([
+			function (next) {
+				db.getSortedSetRangeWithScores('cid:' + fromCid + ':tag:whitelist', 0, -1, next);
+			},
+			function (_data, next) {
+				data = _data;
+				db.delete('cid:' + toCid + ':tag:whitelist', next);
+			},
+			function (next) {
+				db.sortedSetAdd('cid:' + toCid + ':tag:whitelist', data.map(item => item.score), data.map(item => item.value), next);
+			},
+		], callback);
+	}
 
 	Categories.copyPrivilegesFrom = function (fromCid, toCid, callback) {
 		async.waterfall([

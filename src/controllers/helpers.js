@@ -164,9 +164,9 @@ helpers.buildCategoryBreadcrumbs = function (cid, callback) {
 				return next(err);
 			}
 
-			if (!parseInt(data.disabled, 10) && !parseInt(data.isSection, 10)) {
+			if (!data.disabled && !data.isSection) {
 				breadcrumbs.unshift({
-					text: validator.escape(String(data.name)),
+					text: String(data.name),
 					url: nconf.get('relative_path') + '/category/' + data.slug,
 				});
 			}
@@ -245,6 +245,9 @@ helpers.getWatchedCategories = function (uid, selectedCid, callback) {
 			user.getWatchedCategories(uid, next);
 		},
 		function (cids, next) {
+			privileges.categories.filterCids('read', cids, uid, next);
+		},
+		function (cids, next) {
 			getCategoryData(cids, uid, selectedCid, next);
 		},
 	], callback);
@@ -256,28 +259,21 @@ function getCategoryData(cids, uid, selectedCid, callback) {
 	}
 	async.waterfall([
 		function (next) {
-			privileges.categories.filterCids('read', cids, uid, next);
-		},
-		function (cids, next) {
 			categories.getCategoriesFields(cids, ['cid', 'name', 'slug', 'icon', 'link', 'color', 'bgColor', 'parentCid', 'image', 'imageClass'], next);
 		},
 		function (categoryData, next) {
-			categoryData = categoryData.filter(function (category) {
-				return category && !category.link;
-			});
+			categoryData = categoryData.filter(category => category && !category.link);
 			var selectedCategory = [];
 			var selectedCids = [];
 			categoryData.forEach(function (category) {
-				category.selected = selectedCid ? selectedCid.indexOf(String(category.cid)) !== -1 : false;
+				category.selected = selectedCid ? selectedCid.includes(String(category.cid)) : false;
 				category.parentCid = category.hasOwnProperty('parentCid') && utils.isNumber(category.parentCid) ? category.parentCid : 0;
 				if (category.selected) {
 					selectedCategory.push(category);
-					selectedCids.push(parseInt(category.cid, 10));
+					selectedCids.push(category.cid);
 				}
 			});
-			selectedCids.sort(function (a, b) {
-				return a - b;
-			});
+			selectedCids.sort((a, b) => a - b);
 
 			if (selectedCategory.length > 1) {
 				selectedCategory = {
@@ -292,7 +288,7 @@ function getCategoryData(cids, uid, selectedCid, callback) {
 			}
 
 			var categoriesData = [];
-			var tree = categories.getTree(categoryData, 0);
+			var tree = categories.getTree(categoryData);
 
 			tree.forEach(function (category) {
 				recursive(category, categoriesData, '');
@@ -306,8 +302,9 @@ function getCategoryData(cids, uid, selectedCid, callback) {
 function recursive(category, categoriesData, level) {
 	category.level = level;
 	categoriesData.push(category);
-
-	category.children.forEach(function (child) {
-		recursive(child, categoriesData, '&nbsp;&nbsp;&nbsp;&nbsp;' + level);
-	});
+	if (Array.isArray(category.children)) {
+		category.children.forEach(function (child) {
+			recursive(child, categoriesData, '&nbsp;&nbsp;&nbsp;&nbsp;' + level);
+		});
+	}
 }

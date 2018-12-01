@@ -32,19 +32,23 @@ image.resizeImage = function (data, callback) {
 			callback(err);
 		});
 	} else {
+		var sharpImage;
 		async.waterfall([
 			function (next) {
 				fs.readFile(data.path, next);
 			},
 			function (buffer, next) {
 				var sharp = requireSharp();
-				var sharpImage = sharp(buffer, {
+				sharpImage = sharp(buffer, {
 					failOnError: true,
 				});
+				sharpImage.metadata(next);
+			},
+			function (metadata, next) {
 				sharpImage.rotate(); // auto-orients based on exif data
 				sharpImage.resize(data.hasOwnProperty('width') ? data.width : null, data.hasOwnProperty('height') ? data.height : null);
 
-				if (data.quality) {
+				if (data.quality && metadata.format === 'jpeg') {
 					sharpImage.jpeg({ quality: data.quality });
 				}
 
@@ -93,8 +97,8 @@ image.checkDimensions = function (path, callback) {
 			return callback(err);
 		}
 
-		const maxWidth = parseInt(meta.config.rejectImageWidth, 10) || 5000;
-		const maxHeight = parseInt(meta.config.rejectImageHeight, 10) || 5000;
+		const maxWidth = meta.config.rejectImageWidth;
+		const maxHeight = meta.config.rejectImageHeight;
 		if (result.width > maxWidth || result.height > maxHeight) {
 			return callback(new Error('[[error:invalid-image-dimensions]]'));
 		}

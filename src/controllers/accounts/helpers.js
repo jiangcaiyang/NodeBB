@@ -51,32 +51,32 @@ helpers.getUserDataByUserSlug = function (userslug, callerUID, callback) {
 					user.getIPs(uid, 4, next);
 				},
 				profile_menu: function (next) {
-					plugins.fireHook('filter:user.profileMenu', {
-						uid: uid,
-						callerUID: callerUID,
-						links: [{
-							id: 'info',
-							route: 'info',
-							name: '[[user:account_info]]',
-							visibility: {
-								self: false,
-								other: false,
-								moderator: true,
-								globalMod: true,
-								admin: true,
-							},
-						}, {
-							id: 'sessions',
-							route: 'sessions',
-							name: '[[pages:account/sessions]]',
-							visibility: {
-								self: true,
-								other: false,
-								moderator: false,
-								globalMod: false,
-								admin: false,
-							},
-						}, {
+					const links = [{
+						id: 'info',
+						route: 'info',
+						name: '[[user:account_info]]',
+						visibility: {
+							self: false,
+							other: false,
+							moderator: true,
+							globalMod: true,
+							admin: true,
+						},
+					}, {
+						id: 'sessions',
+						route: 'sessions',
+						name: '[[pages:account/sessions]]',
+						visibility: {
+							self: true,
+							other: false,
+							moderator: false,
+							globalMod: false,
+							admin: false,
+						},
+					}];
+
+					if (meta.config.gdpr_enabled) {
+						links.push({
 							id: 'consent',
 							route: 'consent',
 							name: '[[user:consent.title]]',
@@ -87,7 +87,13 @@ helpers.getUserDataByUserSlug = function (userslug, callerUID, callback) {
 								globalMod: false,
 								admin: false,
 							},
-						}],
+						});
+					}
+
+					plugins.fireHook('filter:user.profileMenu', {
+						uid: uid,
+						callerUID: callerUID,
+						links: links,
 					}, next);
 				},
 				groups: function (next) {
@@ -125,13 +131,13 @@ helpers.getUserDataByUserSlug = function (userslug, callerUID, callback) {
 
 			userData.emailClass = 'hide';
 
-			if (!isAdmin && !isGlobalModerator && !isSelf && (!userSettings.showemail || parseInt(meta.config.hideEmail, 10) === 1)) {
+			if (!isAdmin && !isGlobalModerator && !isSelf && (!userSettings.showemail || meta.config.hideEmail)) {
 				userData.email = '';
 			} else if (!userSettings.showemail) {
 				userData.emailClass = '';
 			}
 
-			if (!isAdmin && !isGlobalModerator && !isSelf && (!userSettings.showfullname || parseInt(meta.config.hideFullname, 10) === 1)) {
+			if (!isAdmin && !isGlobalModerator && !isSelf && (!userSettings.showfullname || meta.config.hideFullname)) {
 				userData.fullname = '';
 			}
 
@@ -159,15 +165,15 @@ helpers.getUserDataByUserSlug = function (userslug, callerUID, callback) {
 			userData.isSelfOrAdminOrGlobalModerator = isSelf || isAdmin || isGlobalModerator;
 			userData.canEdit = results.canEdit;
 			userData.canBan = results.canBanUser;
-			userData.canChangePassword = isAdmin || (isSelf && parseInt(meta.config['password:disableEdit'], 10) !== 1);
+			userData.canChangePassword = isAdmin || (isSelf && !meta.config['password:disableEdit']);
 			userData.isSelf = isSelf;
 			userData.isFollowing = results.isFollowing;
 			userData.showHidden = isSelf || isAdmin || (isGlobalModerator && !results.isTargetAdmin);
 			userData.groups = Array.isArray(results.groups) && results.groups.length ? results.groups[0] : [];
-			userData.disableSignatures = meta.config.disableSignatures !== undefined && parseInt(meta.config.disableSignatures, 10) === 1;
-			userData['reputation:disabled'] = parseInt(meta.config['reputation:disabled'], 10) === 1;
-			userData['downvote:disabled'] = parseInt(meta.config['downvote:disabled'], 10) === 1;
-			userData['email:confirmed'] = !!parseInt(userData['email:confirmed'], 10);
+			userData.disableSignatures = meta.config.disableSignatures === 1;
+			userData['reputation:disabled'] = meta.config['reputation:disabled'] === 1;
+			userData['downvote:disabled'] = meta.config['downvote:disabled'] === 1;
+			userData['email:confirmed'] = !!userData['email:confirmed'];
 			userData.profile_links = filterLinks(results.profile_menu.links, {
 				self: isSelf,
 				other: !isSelf,
@@ -178,12 +184,10 @@ helpers.getUserDataByUserSlug = function (userslug, callerUID, callback) {
 
 			userData.sso = results.sso.associations;
 			userData.status = user.getStatus(userData);
-			userData.banned = parseInt(userData.banned, 10) === 1;
+			userData.banned = userData.banned === 1;
 			userData.website = validator.escape(String(userData.website || ''));
 			userData.websiteLink = !userData.website.startsWith('http') ? 'http://' + userData.website : userData.website;
 			userData.websiteName = userData.website.replace(validator.escape('http://'), '').replace(validator.escape('https://'), '');
-			userData.followingCount = parseInt(userData.followingCount, 10) || 0;
-			userData.followerCount = parseInt(userData.followerCount, 10) || 0;
 
 			userData.email = validator.escape(String(userData.email || ''));
 			userData.fullname = validator.escape(String(userData.fullname || ''));
@@ -200,18 +204,12 @@ helpers.getUserDataByUserSlug = function (userslug, callerUID, callback) {
 			}
 
 			userData['cover:position'] = validator.escape(String(userData['cover:position'] || '50% 50%'));
-			userData['username:disableEdit'] = !userData.isAdmin && parseInt(meta.config['username:disableEdit'], 10) === 1;
-			userData['email:disableEdit'] = !userData.isAdmin && parseInt(meta.config['email:disableEdit'], 10) === 1;
+			userData['username:disableEdit'] = !userData.isAdmin && meta.config['username:disableEdit'];
+			userData['email:disableEdit'] = !userData.isAdmin && meta.config['email:disableEdit'];
 
 			next(null, userData);
 		},
 	], callback);
-};
-
-
-helpers.getBaseUser = function (userslug, callerUID, callback) {
-	winston.warn('helpers.getBaseUser deprecated please use helpers.getUserDataByUserSlug');
-	helpers.getUserDataByUserSlug(userslug, callerUID, callback);
 };
 
 function filterLinks(links, states) {

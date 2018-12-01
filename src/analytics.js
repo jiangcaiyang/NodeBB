@@ -5,6 +5,7 @@ var async = require('async');
 var winston = require('winston');
 var nconf = require('nconf');
 var crypto = require('crypto');
+var LRU = require('lru-cache');
 
 var db = require('./database');
 var plugins = require('./plugins');
@@ -14,6 +15,9 @@ var Analytics = module.exports;
 var counters = {};
 
 var pageViews = 0;
+var pageViewsRegistered = 0;
+var pageViewsGuest = 0;
+var pageViewsBot = 0;
 var uniqueIPCount = 0;
 var uniquevisitors = 0;
 
@@ -22,7 +26,6 @@ var uniquevisitors = 0;
  * the cache could be exhausted continuously if there are more than 500 concurrently
  * active users
  */
-var LRU = require('lru-cache');
 var ipCache = LRU({
 	max: 500,
 	length: function () { return 1; },
@@ -50,6 +53,14 @@ Analytics.increment = function (keys, callback) {
 
 Analytics.pageView = function (payload) {
 	pageViews += 1;
+
+	if (payload.uid > 0) {
+		pageViewsRegistered += 1;
+	} else if (payload.uid < 0) {
+		pageViewsBot += 1;
+	} else {
+		pageViewsGuest += 1;
+	}
 
 	if (payload.ip) {
 		// Retrieve hash or calculate if not present
@@ -90,6 +101,24 @@ Analytics.writeData = function (callback) {
 		dbQueue.push(async.apply(db.sortedSetIncrBy, 'analytics:pageviews', pageViews, today.getTime()));
 		dbQueue.push(async.apply(db.sortedSetIncrBy, 'analytics:pageviews:month', pageViews, month.getTime()));
 		pageViews = 0;
+	}
+
+	if (pageViewsRegistered > 0) {
+		dbQueue.push(async.apply(db.sortedSetIncrBy, 'analytics:pageviews:registered', pageViewsRegistered, today.getTime()));
+		dbQueue.push(async.apply(db.sortedSetIncrBy, 'analytics:pageviews:month:registered', pageViewsRegistered, month.getTime()));
+		pageViewsRegistered = 0;
+	}
+
+	if (pageViewsGuest > 0) {
+		dbQueue.push(async.apply(db.sortedSetIncrBy, 'analytics:pageviews:guest', pageViewsGuest, today.getTime()));
+		dbQueue.push(async.apply(db.sortedSetIncrBy, 'analytics:pageviews:month:guest', pageViewsGuest, month.getTime()));
+		pageViewsGuest = 0;
+	}
+
+	if (pageViewsBot > 0) {
+		dbQueue.push(async.apply(db.sortedSetIncrBy, 'analytics:pageviews:bot', pageViewsBot, today.getTime()));
+		dbQueue.push(async.apply(db.sortedSetIncrBy, 'analytics:pageviews:month:bot', pageViewsBot, month.getTime()));
+		pageViewsBot = 0;
 	}
 
 	if (uniquevisitors > 0) {

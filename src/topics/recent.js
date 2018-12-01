@@ -3,7 +3,6 @@
 'use strict';
 
 var async = require('async');
-var winston = require('winston');
 
 var db = require('../database');
 var plugins = require('../plugins');
@@ -60,13 +59,13 @@ module.exports = function (Topics) {
 				Topics.getLatestUndeletedPid(tid, next);
 			},
 			function (pid, next) {
-				if (!parseInt(pid, 10)) {
+				if (!pid) {
 					return callback();
 				}
 				posts.getPostField(pid, 'timestamp', next);
 			},
 			function (timestamp, next) {
-				if (!parseInt(timestamp, 10)) {
+				if (!timestamp) {
 					return callback();
 				}
 				Topics.updateLastPostTime(tid, timestamp, next);
@@ -87,11 +86,11 @@ module.exports = function (Topics) {
 					async.apply(db.sortedSetAdd, 'cid:' + topicData.cid + ':tids:lastposttime', lastposttime, tid),
 				];
 
-				if (parseInt(topicData.deleted, 10) !== 1) {
+				if (!topicData.deleted) {
 					tasks.push(async.apply(Topics.updateRecent, tid, lastposttime));
 				}
 
-				if (parseInt(topicData.pinned, 10) !== 1) {
+				if (!topicData.pinned) {
 					tasks.push(async.apply(db.sortedSetAdd, 'cid:' + topicData.cid + ':tids', lastposttime, tid));
 				}
 				async.series(tasks, next);
@@ -99,11 +98,6 @@ module.exports = function (Topics) {
 		], function (err) {
 			callback(err);
 		});
-	};
-
-	Topics.updateTimestamp = function (tid, lastposttime, callback) {
-		winston.warn('[deprecated] Topics.updateTimestamp is deprecated please use Topics.updateLastPostTime');
-		Topics.updateLastPostTime(tid, lastposttime, callback);
 	};
 
 	Topics.updateRecent = function (tid, timestamp, callback) {

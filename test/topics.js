@@ -218,7 +218,33 @@ describe('Topic\'s', function () {
 
 
 		it('should not receive errors', function (done) {
-			topics.getTopicData(newTopic.tid, done);
+			topics.getTopicData(newTopic.tid, function (err, topicData) {
+				assert.ifError(err);
+				assert(typeof topicData.tid === 'number');
+				assert(typeof topicData.uid === 'number');
+				assert(typeof topicData.cid === 'number');
+				assert(typeof topicData.mainPid === 'number');
+
+				assert(typeof topicData.timestamp === 'number');
+				assert.strictEqual(topicData.postcount, 1);
+				assert.strictEqual(topicData.viewcount, 0);
+				assert.strictEqual(topicData.upvotes, 0);
+				assert.strictEqual(topicData.downvotes, 0);
+				assert.strictEqual(topicData.votes, 0);
+				assert.strictEqual(topicData.deleted, 0);
+				assert.strictEqual(topicData.locked, 0);
+				assert.strictEqual(topicData.pinned, 0);
+				done();
+			});
+		});
+
+		it('should get a single field', function (done) {
+			topics.getTopicFields(newTopic.tid, ['slug'], function (err, data) {
+				assert.ifError(err);
+				assert(Object.keys(data).length === 1);
+				assert(data.hasOwnProperty('slug'));
+				done();
+			});
 		});
 
 		it('should get topic title by pid', function (done) {
@@ -362,9 +388,9 @@ describe('Topic\'s', function () {
 		it('should pin topic', function (done) {
 			socketTopics.pin({ uid: 1 }, { tids: [newTopic.tid], cid: categoryObj.cid }, function (err) {
 				assert.ifError(err);
-				db.getObjectField('topic:' + newTopic.tid, 'pinned', function (err, pinned) {
+				topics.getTopicField(newTopic.tid, 'pinned', function (err, pinned) {
 					assert.ifError(err);
-					assert.strictEqual(parseInt(pinned, 10), 1);
+					assert.strictEqual(pinned, 1);
 					done();
 				});
 			});
@@ -373,9 +399,9 @@ describe('Topic\'s', function () {
 		it('should unpin topic', function (done) {
 			socketTopics.unpin({ uid: 1 }, { tids: [newTopic.tid], cid: categoryObj.cid }, function (err) {
 				assert.ifError(err);
-				db.getObjectField('topic:' + newTopic.tid, 'pinned', function (err, pinned) {
+				topics.getTopicField(newTopic.tid, 'pinned', function (err, pinned) {
 					assert.ifError(err);
-					assert.strictEqual(parseInt(pinned, 10), 0);
+					assert.strictEqual(pinned, 0);
 					done();
 				});
 			});
@@ -497,7 +523,7 @@ describe('Topic\'s', function () {
 				function (categoryData, next) {
 					assert.equal(categoryData[0].post_count, 4);
 					assert.equal(categoryData[1].post_count, 2);
-					topics.movePostToTopic(movedPost.pid, tid2, next);
+					topics.movePostToTopic(1, movedPost.pid, tid2, next);
 				},
 				function (next) {
 					checkCidSets(previousPost, topic2LastReply, next);
@@ -674,7 +700,7 @@ describe('Topic\'s', function () {
 					var topic;
 					var i;
 					for (i = 0; i < topics.length; i += 1) {
-						if (parseInt(topics[i].tid, 10) === parseInt(newTid, 10)) {
+						if (topics[i].tid === parseInt(newTid, 10)) {
 							assert.equal(false, topics[i].unread, 'ignored topic was marked as unread in recent list');
 							return done();
 						}
@@ -1038,7 +1064,7 @@ describe('Topic\'s', function () {
 		});
 
 		it('should error with invalid data', function (done) {
-			socketTopics.loadMoreUnreadTopics({ uid: adminUid }, { after: 'invalid' }, function (err) {
+			socketTopics.loadMoreSortedTopics({ uid: adminUid }, { after: 'invalid' }, function (err) {
 				assert.equal(err.message, '[[error:invalid-data]]');
 				done();
 			});
@@ -1047,7 +1073,7 @@ describe('Topic\'s', function () {
 		it('should load more unread topics', function (done) {
 			socketTopics.markUnread({ uid: adminUid }, tid, function (err) {
 				assert.ifError(err);
-				socketTopics.loadMoreUnreadTopics({ uid: adminUid }, { cid: topic.categoryId, after: 0, count: 10 }, function (err, data) {
+				socketTopics.loadMoreSortedTopics({ uid: adminUid }, { cid: topic.categoryId, after: 0, count: 10, sort: 'unread' }, function (err, data) {
 					assert.ifError(err);
 					assert(data);
 					assert(Array.isArray(data.topics));
@@ -1057,7 +1083,7 @@ describe('Topic\'s', function () {
 		});
 
 		it('should error with invalid data', function (done) {
-			socketTopics.loadMoreRecentTopics({ uid: adminUid }, { after: 'invalid' }, function (err) {
+			socketTopics.loadMoreSortedTopics({ uid: adminUid }, { after: 'invalid' }, function (err) {
 				assert.equal(err.message, '[[error:invalid-data]]');
 				done();
 			});
@@ -1065,7 +1091,7 @@ describe('Topic\'s', function () {
 
 
 		it('should load more recent topics', function (done) {
-			socketTopics.loadMoreRecentTopics({ uid: adminUid }, { cid: topic.categoryId, after: 0, count: 10 }, function (err, data) {
+			socketTopics.loadMoreSortedTopics({ uid: adminUid }, { cid: topic.categoryId, after: 0, count: 10, sort: 'recent' }, function (err, data) {
 				assert.ifError(err);
 				assert(data);
 				assert(Array.isArray(data.topics));
@@ -1373,7 +1399,7 @@ describe('Topic\'s', function () {
 					topics.getUnreadTids({ cid: 0, uid: adminUid }, next);
 				},
 				function (unreadTids, next) {
-					assert(!unreadTids.includes(parseInt(topic.tid, 10)));
+					assert(!unreadTids.includes(topic.tid));
 					User.blocks.remove(blockedUid, adminUid, next);
 				},
 			], done);
@@ -1919,8 +1945,8 @@ describe('Topic\'s', function () {
 						var tags = result.topic.tags.map(function (tag) {
 							return tag.value;
 						});
-						assert(tags.indexOf('tag1') !== -1);
-						assert(tags.indexOf('tag2') !== -1);
+						assert(tags.includes('tag1'));
+						assert(tags.includes('tag2'));
 						done();
 					});
 				});

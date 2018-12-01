@@ -37,7 +37,7 @@ module.exports = function (Topics) {
 				}, next);
 			},
 			function (results, next) {
-				Topics.calculatePostIndices(results.posts, start, stop, results.postCount, reverse);
+				Topics.calculatePostIndices(results.posts, start, results.postCount, reverse);
 
 				Topics.addPostData(results.posts, uid, next);
 			},
@@ -48,33 +48,28 @@ module.exports = function (Topics) {
 		if (!Array.isArray(postData) || !postData.length) {
 			return callback(null, []);
 		}
-		var pids = postData.map(function (post) {
-			return post && post.pid;
-		});
+		var pids = postData.map(post => post && post.pid);
 
 		if (!Array.isArray(pids) || !pids.length) {
 			return callback(null, []);
 		}
 
 		function getPostUserData(field, method, callback) {
-			var uids = [];
+			var uidsMap = {};
 
-			postData.forEach(function (postData) {
-				if (postData && parseInt(postData[field], 10) >= 0 && uids.indexOf(postData[field]) === -1) {
-					uids.push(postData[field]);
+			postData.forEach((post) => {
+				if (post && parseInt(post[field], 10) >= 0) {
+					uidsMap[post[field]] = 1;
 				}
 			});
+			const uids = Object.keys(uidsMap);
 
 			async.waterfall([
 				function (next) {
 					method(uids, next);
 				},
 				function (users, next) {
-					var userData = {};
-					users.forEach(function (user, index) {
-						userData[uids[index]] = user;
-					});
-					next(null, userData);
+					next(null, _.zipObject(uids, users));
 				},
 			], callback);
 		}
@@ -109,18 +104,17 @@ module.exports = function (Topics) {
 			function (results, next) {
 				postData.forEach(function (postObj, i) {
 					if (postObj) {
-						postObj.deleted = parseInt(postObj.deleted, 10) === 1;
-						postObj.user = parseInt(postObj.uid, 10) ? results.userData[postObj.uid] : _.clone(results.userData[postObj.uid]);
+						postObj.user = postObj.uid ? results.userData[postObj.uid] : _.clone(results.userData[postObj.uid]);
 						postObj.editor = postObj.editor ? results.editors[postObj.editor] : null;
 						postObj.bookmarked = results.bookmarks[i];
 						postObj.upvoted = results.voteData.upvotes[i];
 						postObj.downvoted = results.voteData.downvotes[i];
 						postObj.votes = postObj.votes || 0;
 						postObj.replies = results.replies[i];
-						postObj.selfPost = !!parseInt(uid, 10) && parseInt(uid, 10) === parseInt(postObj.uid, 10);
+						postObj.selfPost = parseInt(uid, 10) > 0 && parseInt(uid, 10) === postObj.uid;
 
 						// Username override for guests, if enabled
-						if (parseInt(meta.config.allowGuestHandles, 10) === 1 && parseInt(postObj.uid, 10) === 0 && postObj.handle) {
+						if (meta.config.allowGuestHandles && postObj.uid === 0 && postObj.handle) {
 							postObj.user.username = validator.escape(String(postObj.handle));
 						}
 					}
@@ -137,7 +131,7 @@ module.exports = function (Topics) {
 	};
 
 	Topics.modifyPostsByPrivilege = function (topicData, topicPrivileges) {
-		var loggedIn = !!parseInt(topicPrivileges.uid, 10);
+		var loggedIn = parseInt(topicPrivileges.uid, 10) > 0;
 		topicData.posts.forEach(function (post) {
 			if (post) {
 				post.display_edit_tools = topicPrivileges.isAdminOrMod || (post.selfPost && topicPrivileges['posts:edit']);
@@ -158,7 +152,7 @@ module.exports = function (Topics) {
 		}).filter(Boolean);
 
 		if (!parentPids.length) {
-			return callback();
+			return setImmediate(callback);
 		}
 
 		var parentPosts;
@@ -166,9 +160,7 @@ module.exports = function (Topics) {
 			async.apply(posts.getPostsFields, parentPids, ['uid']),
 			function (_parentPosts, next) {
 				parentPosts = _parentPosts;
-				var parentUids = _.uniq(parentPosts.map(function (postObj) {
-					return postObj && parseInt(postObj.uid, 10);
-				}));
+				var parentUids = _.uniq(parentPosts.map(postObj => postObj && postObj.uid));
 
 				user.getUsersFields(parentUids, ['username'], next);
 			},
@@ -190,7 +182,7 @@ module.exports = function (Topics) {
 		], callback);
 	};
 
-	Topics.calculatePostIndices = function (posts, start, stop, postCount, reverse) {
+	Topics.calculatePostIndices = function (posts, start, postCount, reverse) {
 		posts.forEach(function (post, index) {
 			if (reverse) {
 				post.index = postCount - (start + index + 1);
@@ -206,8 +198,8 @@ module.exports = function (Topics) {
 				Topics.getLatestUndeletedReply(tid, next);
 			},
 			function (pid, next) {
-				if (parseInt(pid, 10)) {
-					return callback(null, pid.toString());
+				if (pid) {
+					return callback(null, pid);
 				}
 				Topics.getTopicField(tid, 'mainPid', next);
 			},
@@ -215,7 +207,7 @@ module.exports = function (Topics) {
 				posts.getPostFields(mainPid, ['pid', 'deleted'], next);
 			},
 			function (mainPost, next) {
-				next(null, parseInt(mainPost.pid, 10) && parseInt(mainPost.deleted, 10) !== 1 ? mainPost.pid.toString() : null);
+				next(null, mainPost.pid && !mainPost.deleted ? mainPost.pid : null);
 			},
 		], callback);
 	};
@@ -242,7 +234,7 @@ module.exports = function (Topics) {
 						posts.getPostField(pids[0], 'deleted', _next);
 					},
 					function (deleted, _next) {
-						isDeleted = parseInt(deleted, 10) === 1;
+						isDeleted = deleted;
 						if (!isDeleted) {
 							latestPid = pids[0];
 						}
@@ -255,7 +247,7 @@ module.exports = function (Topics) {
 				return isDeleted && !done;
 			},
 			function (err) {
-				callback(err, latestPid);
+				callback(err, parseInt(latestPid, 10));
 			}
 		);
 	};
@@ -398,9 +390,7 @@ module.exports = function (Topics) {
 		var uniquePids;
 		async.waterfall([
 			function (next) {
-				var keys = pids.map(function (pid) {
-					return 'pid:' + pid + ':replies';
-				});
+				const keys = pids.map(pid => 'pid:' + pid + ':replies');
 				db.getSortedSetsMembers(keys, next);
 			},
 			function (arrayOfPids, next) {
@@ -412,9 +402,7 @@ module.exports = function (Topics) {
 			},
 			function (_replyData, next) {
 				replyData = _replyData;
-				var uids = replyData.map(function (replyData) {
-					return replyData && replyData.uid;
-				});
+				const uids = replyData.map(replyData => replyData && replyData.uid);
 
 				uniqueUids = _.uniq(uids);
 

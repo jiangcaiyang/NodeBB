@@ -456,12 +456,19 @@ describe('User', function () {
 			User.reset.commit(code, 'newpassword', function (err) {
 				assert.ifError(err);
 
-				db.getObject('user:' + uid, function (err, userData) {
+				async.parallel({
+					userData: function (next) {
+						User.getUserData(uid, next);
+					},
+					password: function (next) {
+						db.getObjectField('user:' + uid, 'password', next);
+					},
+				}, function (err, results) {
 					assert.ifError(err);
-					Password.compare('newpassword', userData.password, function (err, match) {
+					Password.compare('newpassword', results.password, function (err, match) {
 						assert.ifError(err);
 						assert(match);
-						assert.equal(parseInt(userData['email:confirmed'], 10), 1);
+						assert.strictEqual(results.userData['email:confirmed'], 1);
 						done();
 					});
 				});
@@ -552,7 +559,8 @@ describe('User', function () {
 					assert(!userData.hasOwnProperty('another_secret'));
 					assert(!userData.hasOwnProperty('password'));
 					assert(!userData.hasOwnProperty('rss_token'));
-					assert.equal(userData.postcount, '123');
+					assert.strictEqual(userData.postcount, 123);
+					assert.strictEqual(userData.uid, testUid);
 					done();
 				});
 			});
@@ -594,6 +602,25 @@ describe('User', function () {
 			User.getUidsByEmails(['john@example.com'], function (err, uids) {
 				assert.ifError(err);
 				assert.equal(uids[0], testUid);
+				done();
+			});
+		});
+
+		it('should not get groupTitle for guests', function (done) {
+			User.getUserData(0, function (err, userData) {
+				assert.ifError(err);
+				assert.strictEqual(userData.groupTitle, '');
+				assert.deepStrictEqual(userData.groupTitleArray, []);
+				done();
+			});
+		});
+
+		it('should load guest data', function (done) {
+			User.getUsersData([1, 0], function (err, data) {
+				assert.ifError(err);
+				assert.strictEqual(data[1].username, '[[global:guest]]');
+				assert.strictEqual(data[1].userslug, '');
+				assert.strictEqual(data[1].uid, 0);
 				done();
 			});
 		});
@@ -1376,7 +1403,6 @@ describe('User', function () {
 					homePageCustom: '',
 					openOutgoingLinksInNewTab: 0,
 					scrollToMyPost: 1,
-					delayImageLoading: 1,
 					userLang: 'en-GB',
 					usePagination: 1,
 					topicsPerPage: '10',
@@ -1472,6 +1498,34 @@ describe('User', function () {
 						done();
 					});
 				});
+			});
+		});
+
+		it('should fail to add user to queue if username is taken', function (done) {
+			helpers.registerUser({
+				username: 'rejectme',
+				password: '123456',
+				'password-confirm': '123456',
+				email: '<script>alert("ok")<script>reject@me.com',
+				gdpr_consent: true,
+			}, function (err, jar, res, body) {
+				assert.ifError(err);
+				assert.equal(body, '[[error:username-taken]]');
+				done();
+			});
+		});
+
+		it('should fail to add user to queue if email is taken', function (done) {
+			helpers.registerUser({
+				username: 'rejectmenew',
+				password: '123456',
+				'password-confirm': '123456',
+				email: '<script>alert("ok")<script>reject@me.com',
+				gdpr_consent: true,
+			}, function (err, jar, res, body) {
+				assert.ifError(err);
+				assert.equal(body, '[[error:email-taken]]');
+				done();
 			});
 		});
 

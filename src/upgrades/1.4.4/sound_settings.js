@@ -1,8 +1,8 @@
 'use strict';
 
+var async = require('async');
 var db = require('../../database');
 
-var async = require('async');
 
 module.exports = {
 	name: 'Update global and user sound settings',
@@ -27,7 +27,7 @@ module.exports = {
 					}
 
 					keys.forEach(function (key) {
-						if (settings[key] && settings[key].indexOf(' | ') === -1) {
+						if (settings[key] && !settings[key].includes(' | ')) {
 							settings[key] = map[settings[key]] || '';
 						}
 					});
@@ -46,7 +46,7 @@ module.exports = {
 							}
 							var newSettings = {};
 							keys.forEach(function (key) {
-								if (settings[key] && settings[key].indexOf(' | ') === -1) {
+								if (settings[key] && !settings[key].includes(' | ')) {
 									newSettings[key] = map[settings[key]] || '';
 								}
 							});

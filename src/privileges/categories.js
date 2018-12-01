@@ -76,8 +76,8 @@ module.exports = function (privileges) {
 	};
 
 	privileges.categories.isAdminOrMod = function (cid, uid, callback) {
-		if (!parseInt(uid, 10)) {
-			return callback(null, false);
+		if (parseInt(uid, 10) <= 0) {
+			return setImmediate(callback, null, false);
 		}
 		helpers.some([
 			function (next) {
@@ -108,7 +108,7 @@ module.exports = function (privileges) {
 				categories.getCategoryField(cid, 'disabled', next);
 			},
 			function (disabled, next) {
-				if (parseInt(disabled, 10) === 1) {
+				if (disabled) {
 					return callback(null, false);
 				}
 				helpers.some([

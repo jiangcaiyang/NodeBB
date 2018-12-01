@@ -49,7 +49,7 @@ module.exports = function (Posts) {
 					postData.toPid = data.toPid;
 				}
 
-				if (data.ip && parseInt(meta.config.trackIpPerPost, 10) === 1) {
+				if (data.ip && meta.config.trackIpPerPost) {
 					postData.ip = data.ip;
 				}
 
@@ -114,4 +114,3 @@ module.exports = function (Posts) {
 		], callback);
 	};
 };
-

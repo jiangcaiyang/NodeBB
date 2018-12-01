@@ -12,7 +12,7 @@ module.exports = function (Posts) {
 	var votesInProgress = {};
 
 	Posts.upvote = function (pid, uid, callback) {
-		if (parseInt(meta.config['reputation:disabled'], 10) === 1) {
+		if (meta.config['reputation:disabled']) {
 			return callback(new Error('[[error:reputation-system-disabled]]'));
 		}
 
@@ -40,11 +40,11 @@ module.exports = function (Posts) {
 	};
 
 	Posts.downvote = function (pid, uid, callback) {
-		if (parseInt(meta.config['reputation:disabled'], 10) === 1) {
+		if (meta.config['reputation:disabled']) {
 			return callback(new Error('[[error:reputation-system-disabled]]'));
 		}
 
-		if (parseInt(meta.config['downvote:disabled'], 10) === 1) {
+		if (meta.config['downvote:disabled']) {
 			return callback(new Error('[[error:downvoting-disabled]]'));
 		}
 
@@ -85,8 +85,8 @@ module.exports = function (Posts) {
 	};
 
 	Posts.hasVoted = function (pid, uid, callback) {
-		if (!parseInt(uid, 10)) {
-			return callback(null, { upvoted: false, downvoted: false });
+		if (parseInt(uid, 10) <= 0) {
+			return setImmediate(callback, null, { upvoted: false, downvoted: false });
 		}
 		async.waterfall([
 			function (next) {
@@ -99,9 +99,9 @@ module.exports = function (Posts) {
 	};
 
 	Posts.getVoteStatusByPostIDs = function (pids, uid, callback) {
-		if (!parseInt(uid, 10)) {
-			var data = pids.map(function () { return false; });
-			return callback(null, { upvotes: data, downvotes: data });
+		if (parseInt(uid, 10) <= 0) {
+			var data = pids.map(() => false);
+			return setImmediate(callback, null, { upvotes: data, downvotes: data });
 		}
 		var upvoteSets = [];
 		var downvoteSets = [];
@@ -110,15 +110,17 @@ module.exports = function (Posts) {
 			upvoteSets.push('pid:' + pids[i] + ':upvote');
 			downvoteSets.push('pid:' + pids[i] + ':downvote');
 		}
-
-		async.parallel({
-			upvotes: function (next) {
-				db.isMemberOfSets(upvoteSets, uid, next);
+		async.waterfall([
+			function (next) {
+				db.isMemberOfSets(upvoteSets.concat(downvoteSets), uid, next);
 			},
-			downvotes: function (next) {
-				db.isMemberOfSets(downvoteSets, uid, next);
+			function (data, next) {
+				next(null, {
+					upvotes: data.slice(0, pids.length),
+					downvotes: data.slice(pids.length, pids.length * 2),
+				});
 			},
-		}, callback);
+		], callback);
 	};
 
 	Posts.getUpvotedUidsByPids = function (pids, callback) {
@@ -179,7 +181,7 @@ module.exports = function (Posts) {
 					return callback(new Error('[[error:self-vote]]'));
 				}
 
-				if (command === 'downvote' && parseInt(results.reputation, 10) < parseInt(meta.config['min:rep:downvote'], 10)) {
+				if (command === 'downvote' && results.reputation < meta.config['min:rep:downvote']) {
 					return callback(new Error('[[error:not-enough-reputation-to-downvote]]'));
 				}
 
@@ -215,7 +217,7 @@ module.exports = function (Posts) {
 	function vote(type, unvote, pid, uid, callback) {
 		uid = parseInt(uid, 10);
 
-		if (!uid) {
+		if (uid <= 0) {
 			return callback(new Error('[[error:not-logged-in]]'));
 		}
 		var postData;
@@ -294,8 +296,8 @@ module.exports = function (Posts) {
 				}, next);
 			},
 			function (results, next) {
-				postData.upvotes = parseInt(results.upvotes, 10);
-				postData.downvotes = parseInt(results.downvotes, 10);
+				postData.upvotes = results.upvotes;
+				postData.downvotes = results.downvotes;
 				postData.votes = postData.upvotes - postData.downvotes;
 				Posts.updatePostVoteCount(postData, next);
 			},

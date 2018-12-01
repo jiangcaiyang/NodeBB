@@ -37,7 +37,7 @@ describe('Categories', function () {
 
 	it('should create a new category', function (done) {
 		Categories.create({
-			name: 'Test Category',
+			name: 'Test Category & NodeBB',
 			description: 'Test category created by testing script',
 			icon: 'fa-check',
 			blockclass: 'category-blue',
@@ -60,18 +60,19 @@ describe('Categories', function () {
 			assert.equal(err, null);
 
 			assert(categoryData);
-			assert.equal(categoryObj.name, categoryData.name);
+			assert.equal('Test Category &amp; NodeBB', categoryData.name);
 			assert.equal(categoryObj.description, categoryData.description);
-
+			assert.strictEqual(categoryObj.disabled, 0);
 			done();
 		});
 	});
 
 
 	it('should load a category route', function (done) {
-		request(nconf.get('url') + '/category/' + categoryObj.cid + '/test-category', function (err, response, body) {
+		request(nconf.get('url') + '/api/category/' + categoryObj.cid + '/test-category', { json: true }, function (err, response, body) {
 			assert.ifError(err);
 			assert.equal(response.statusCode, 200);
+			assert.equal(body.name, 'Test Category &amp; NodeBB');
 			assert(body);
 			done();
 		});
@@ -337,6 +338,31 @@ describe('Categories', function () {
 			});
 		});
 
+		it('should error if you try to set child as parent', function (done) {
+			var child1Cid;
+			var parentCid;
+			async.waterfall([
+				function (next) {
+					Categories.create({ name: 'parent 1', description: 'poor parent' }, next);
+				},
+				function (category, next) {
+					parentCid = category.cid;
+					Categories.create({ name: 'child1', description: 'wanna be parent', parentCid: parentCid }, next);
+				},
+				function (category, next) {
+					child1Cid = category.cid;
+					var updateData = {};
+					updateData[parentCid] = {
+						parentCid: child1Cid,
+					};
+					socketCategories.update({ uid: adminUid }, updateData, function (err) {
+						assert.equal(err.message, '[[error:cant-set-child-as-parent]]');
+						next();
+					});
+				},
+			], done);
+		});
+
 		it('should update category data', function (done) {
 			var updateData = {};
 			updateData[cid] = {
@@ -460,6 +486,25 @@ describe('Categories', function () {
 			], done);
 		});
 
+		it('should create category with settings from', function (done) {
+			var child1Cid;
+			var parentCid;
+			async.waterfall([
+				function (next) {
+					Categories.create({ name: 'copy from', description: 'copy me' }, next);
+				},
+				function (category, next) {
+					parentCid = category.cid;
+					Categories.create({ name: 'child1', description: 'will be gone', cloneFromCid: parentCid }, next);
+				},
+				function (category, next) {
+					child1Cid = category.cid;
+					assert.equal(category.description, 'copy me');
+					next();
+				},
+			], done);
+		});
+
 		it('should copy settings from', function (done) {
 			var child1Cid;
 			var parentCid;
@@ -475,7 +520,7 @@ describe('Categories', function () {
 					child1Cid = category.cid;
 					socketCategories.copySettingsFrom({ uid: adminUid }, { fromCid: parentCid, toCid: child1Cid }, next);
 				},
-				function (canDelete, next) {
+				function (destinationCategory, next) {
 					Categories.getCategoryField(child1Cid, 'description', next);
 				},
 				function (description, next) {

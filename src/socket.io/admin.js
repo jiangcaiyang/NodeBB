@@ -180,6 +180,9 @@ SocketAdmin.config.setMultiple = function (socket, data, callback) {
 
 	var changes = {};
 	Object.keys(data).forEach(function (key) {
+		if (typeof meta.config[key] === 'number') {
+			data[key] = parseInt(data[key], 10);
+		}
 		if (data[key] !== meta.config[key]) {
 			changes[key] = data[key];
 			changes[key + '_old'] = meta.config[key];
@@ -246,7 +249,7 @@ SocketAdmin.settings.clearSitemapCache = function (socket, data, callback) {
 
 SocketAdmin.email.test = function (socket, data, callback) {
 	var payload = {
-		subject: 'Test Email',
+		subject: '[[email:test-email.subject]]',
 	};
 
 	switch (data.template) {
@@ -291,22 +294,23 @@ SocketAdmin.analytics.get = function (socket, data, callback) {
 			data.amount = 24;
 		}
 	}
-
+	const getStats = data.units === 'days' ? analytics.getDailyStatsForSet : analytics.getHourlyStatsForSet;
 	if (data.graph === 'traffic') {
 		async.parallel({
 			uniqueVisitors: function (next) {
-				if (data.units === 'days') {
-					analytics.getDailyStatsForSet('analytics:uniquevisitors', data.until || Date.now(), data.amount, next);
-				} else {
-					analytics.getHourlyStatsForSet('analytics:uniquevisitors', data.until || Date.now(), data.amount, next);
-				}
+				getStats('analytics:uniquevisitors', data.until || Date.now(), data.amount, next);
 			},
 			pageviews: function (next) {
-				if (data.units === 'days') {
-					analytics.getDailyStatsForSet('analytics:pageviews', data.until || Date.now(), data.amount, next);
-				} else {
-					analytics.getHourlyStatsForSet('analytics:pageviews', data.until || Date.now(), data.amount, next);
-				}
+				getStats('analytics:pageviews', data.until || Date.now(), data.amount, next);
+			},
+			pageviewsRegistered: function (next) {
+				getStats('analytics:pageviews:registered', data.until || Date.now(), data.amount, next);
+			},
+			pageviewsGuest: function (next) {
+				getStats('analytics:pageviews:guest', data.until || Date.now(), data.amount, next);
+			},
+			pageviewsBot: function (next) {
+				getStats('analytics:pageviews:bot', data.until || Date.now(), data.amount, next);
 			},
 			summary: function (next) {
 				analytics.getSummary(next);

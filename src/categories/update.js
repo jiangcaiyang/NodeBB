@@ -1,4 +1,3 @@
-
 'use strict';
 
 var async = require('async');
@@ -8,6 +7,7 @@ var meta = require('../meta');
 var utils = require('../utils');
 var translator = require('../translator');
 var plugins = require('../plugins');
+var cache = require('../cache');
 
 module.exports = function (Categories) {
 	Categories.update = function (modified, callback) {
@@ -92,12 +92,17 @@ module.exports = function (Categories) {
 		}
 		async.waterfall([
 			function (next) {
+				Categories.getChildrenCids(cid, next);
+			},
+			function (childrenCids, next) {
+				if (childrenCids.includes(parseInt(newParent, 10))) {
+					return next(new Error('[[error:cant-set-child-as-parent]]'));
+				}
 				Categories.getCategoryField(cid, 'parentCid', next);
 			},
 			function (oldParent, next) {
 				async.series([
 					function (next) {
-						oldParent = parseInt(oldParent, 10) || 0;
 						db.sortedSetRemove('cid:' + oldParent + ':children', cid, next);
 					},
 					function (next) {
@@ -106,6 +111,10 @@ module.exports = function (Categories) {
 					},
 					function (next) {
 						db.setObjectField('category:' + cid, 'parentCid', newParent, next);
+					},
+					function (next) {
+						cache.del(['cid:' + oldParent + ':children', 'cid:' + newParent + ':children']);
+						next();
 					},
 				], next);
 			},
@@ -125,9 +134,7 @@ module.exports = function (Categories) {
 				db.delete('cid:' + cid + ':tag:whitelist', next);
 			},
 			function (next) {
-				var scores = tags.map(function (tag, index) {
-					return index;
-				});
+				var scores = tags.map((tag, index) => index);
 				db.sortedSetAdd('cid:' + cid + ':tag:whitelist', scores, tags, next);
 			},
 		], callback);
@@ -144,8 +151,11 @@ module.exports = function (Categories) {
 						db.sortedSetAdd('categories:cid', order, cid, next);
 					},
 					function (next) {
-						parentCid = parseInt(parentCid, 10) || 0;
 						db.sortedSetAdd('cid:' + parentCid + ':children', order, cid, next);
+					},
+					function (next) {
+						cache.del(['categories:cid', 'cid:' + parentCid + ':children']);
+						next();
 					},
 				], next);
 			},

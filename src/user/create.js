@@ -1,14 +1,14 @@
 'use strict';
 
 var async = require('async');
+var validator = require('validator');
+var zxcvbn = require('zxcvbn');
 var db = require('../database');
 var utils = require('../utils');
-var validator = require('validator');
 var plugins = require('../plugins');
 var groups = require('../groups');
 var meta = require('../meta');
 
-var zxcvbn = require('zxcvbn');
 
 module.exports = function (User) {
 	User.create = function (data, callback) {
@@ -110,7 +110,7 @@ module.exports = function (User) {
 								async.apply(db.sortedSetAdd, 'user:' + userData.uid + ':emails', timestamp, userData.email),
 							], next);
 
-							if (parseInt(userData.uid, 10) !== 1 && parseInt(meta.config.requireEmailConfirmation, 10) === 1) {
+							if (userData.uid > 1 && meta.config.requireEmailConfirmation) {
 								User.email.sendValidationEmail(userData.uid, {
 									email: userData.email,
 								});

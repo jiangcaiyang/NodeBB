@@ -69,7 +69,7 @@ module.exports = function (Categories) {
 				posts.getPostField(pid, 'tid', next);
 			},
 			function (tid, next) {
-				if (!parseInt(tid, 10)) {
+				if (!tid) {
 					return next();
 				}
 
@@ -85,9 +85,8 @@ module.exports = function (Categories) {
 
 		async.waterfall([
 			function (next) {
-				var keys = categoryData.map(function (category) {
-					return 'cid:' + category.cid + ':recent_tids';
-				});
+				const categoriesToLoad = categoryData.filter(category => category && category.numRecentReplies && parseInt(category.numRecentReplies, 10) > 0);
+				const keys = categoriesToLoad.map(category => 'cid:' + category.cid + ':recent_tids');
 				db.getSortedSetsMembers(keys, next);
 			},
 			function (results, next) {
@@ -121,11 +120,7 @@ module.exports = function (Categories) {
 						topic.teaserPid = topic.teaserPid || topic.mainPid;
 					}
 				});
-				var cids = _topicData.map(function (topic) {
-					return topic && topic.cid;
-				}).filter(function (cid, index, array) {
-					return cid && array.indexOf(cid) === index;
-				});
+				var cids = _.uniq(topicData.map(topic => topic && topic.cid).filter(cid => parseInt(cid, 10)));
 
 				async.parallel({
 					categoryData: async.apply(Categories.getCategoriesFields, cids, ['cid', 'parentCid']),
@@ -158,36 +153,37 @@ module.exports = function (Categories) {
 
 	function assignTopicsToCategories(categories, topics) {
 		categories.forEach(function (category) {
-			category.posts = topics.filter(function (topic) {
-				return topic.cid && (parseInt(topic.cid, 10) === parseInt(category.cid, 10) ||
-					parseInt(topic.parentCid, 10) === parseInt(category.cid, 10));
-			}).sort(function (a, b) {
-				return b.pid - a.pid;
-			}).slice(0, parseInt(category.numRecentReplies, 10));
+			if (category) {
+				category.posts = topics.filter(topic => topic.cid && (topic.cid === category.cid || topic.parentCid === category.cid))
+					.sort((a, b) => b.pid - a.pid)
+					.slice(0, parseInt(category.numRecentReplies, 10));
+			}
 		});
 	}
 
 	function bubbleUpChildrenPosts(categoryData) {
 		categoryData.forEach(function (category) {
-			if (category.posts.length) {
-				return;
-			}
-			var posts = [];
-			getPostsRecursive(category, posts);
+			if (category) {
+				if (category.posts.length) {
+					return;
+				}
+				var posts = [];
+				getPostsRecursive(category, posts);
 
-			posts.sort(function (a, b) {
-				return b.pid - a.pid;
-			});
-			if (posts.length) {
-				category.posts = [posts[0]];
+				posts.sort((a, b) => b.pid - a.pid);
+				if (posts.length) {
+					category.posts = [posts[0]];
+				}
 			}
 		});
 	}
 
 	function getPostsRecursive(category, posts) {
-		category.posts.forEach(function (p) {
-			posts.push(p);
-		});
+		if (Array.isArray(category.posts)) {
+			category.posts.forEach(function (p) {
+				posts.push(p);
+			});
+		}
 
 		category.children.forEach(function (child) {
 			getPostsRecursive(child, posts);
@@ -236,7 +232,7 @@ module.exports = function (Categories) {
 				topics.getTopicField(tid, 'postcount', next);
 			},
 			function (postCount, next) {
-				if (!parseInt(postCount, 10)) {
+				if (!postCount) {
 					return callback();
 				}
 				async.parallel([
@@ -253,4 +249,3 @@ module.exports = function (Categories) {
 		], callback);
 	}
 };
-

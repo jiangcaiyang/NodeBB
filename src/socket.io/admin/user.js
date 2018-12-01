@@ -24,7 +24,7 @@ User.makeAdmins = function (socket, uids, callback) {
 		},
 		function (userData, next) {
 			for (var i = 0; i < userData.length; i += 1) {
-				if (userData[i] && parseInt(userData[i].banned, 10) === 1) {
+				if (userData[i] && userData[i].banned) {
 					return callback(new Error('[[error:cant-make-banned-users-admin]]'));
 				}
 			}
@@ -77,9 +77,7 @@ User.validateEmail = function (socket, uids, callback) {
 		return callback(new Error('[[error:invalid-data]]'));
 	}
 
-	uids = uids.filter(function (uid) {
-		return parseInt(uid, 10);
-	});
+	uids = uids.filter(uid => parseInt(uid, 10));
 
 	async.waterfall([
 		function (next) {
@@ -98,7 +96,7 @@ User.sendValidationEmail = function (socket, uids, callback) {
 		return callback(new Error('[[error:invalid-data]]'));
 	}
 
-	if (parseInt(meta.config.requireEmailConfirmation, 10) !== 1) {
+	if (!meta.config.requireEmailConfirmation) {
 		return callback(new Error('[[error:email-confirmations-are-disabled]]'));
 	}
 
@@ -112,9 +110,7 @@ User.sendPasswordResetEmail = function (socket, uids, callback) {
 		return callback(new Error('[[error:invalid-data]]'));
 	}
 
-	uids = uids.filter(function (uid) {
-		return parseInt(uid, 10);
-	});
+	uids = uids.filter(uid => parseInt(uid, 10));
 
 	async.each(uids, function (uid, next) {
 		async.waterfall([
@@ -207,9 +203,7 @@ User.search = function (socket, data, callback) {
 				return callback(null, searchData);
 			}
 
-			var uids = searchData.users.map(function (user) {
-				return user && user.uid;
-			});
+			var uids = searchData.users.map(user => user && user.uid);
 
 			user.getUsersFields(uids, ['email', 'flags', 'lastonline', 'joindate'], next);
 		},

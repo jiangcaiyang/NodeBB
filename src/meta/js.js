@@ -42,18 +42,17 @@ JS.scripts = {
 	// files listed below are only available client-side, or are bundled in to reduce # of network requests on cold load
 	rjs: [
 		'public/src/client/footer.js',
-		'public/src/client/chats.js',
+		'public/src/client/header/chat.js',
+		'public/src/client/header/notifications.js',
 		'public/src/client/infinitescroll.js',
 		'public/src/client/pagination.js',
 		'public/src/client/recent.js',
 		'public/src/client/unread.js',
 		'public/src/client/topic.js',
 		'public/src/client/topic/events.js',
-		'public/src/client/topic/merge.js',
-		'public/src/client/topic/fork.js',
-		'public/src/client/topic/move.js',
 		'public/src/client/topic/posts.js',
 		'public/src/client/topic/images.js',
+		'public/src/client/topic/votes.js',
 		'public/src/client/topic/postTools.js',
 		'public/src/client/topic/threadTools.js',
 		'public/src/client/categories.js',
@@ -61,19 +60,17 @@ JS.scripts = {
 		'public/src/client/category/tools.js',
 
 		'public/src/modules/translator.js',
-		'public/src/modules/notifications.js',
-		'public/src/modules/chat.js',
 		'public/src/modules/components.js',
 		'public/src/modules/sort.js',
 		'public/src/modules/navigator.js',
 		'public/src/modules/topicSelect.js',
+		'public/src/modules/topicList.js',
 		'public/src/modules/categorySelector.js',
+		'public/src/modules/categorySearch.js',
 		'public/src/modules/share.js',
-		'public/src/modules/search.js',
 		'public/src/modules/alerts.js',
 		'public/src/modules/taskbar.js',
 		'public/src/modules/helpers.js',
-		'public/src/modules/flags.js',
 		'public/src/modules/storage.js',
 		'public/src/modules/handleBack.js',
 	],
@@ -115,7 +112,7 @@ var basePath = path.resolve(__dirname, '../..');
 function minifyModules(modules, fork, callback) {
 	var moduleDirs = modules.reduce(function (prev, mod) {
 		var dir = path.resolve(path.dirname(mod.destPath));
-		if (prev.indexOf(dir) === -1) {
+		if (!prev.includes(dir)) {
 			prev.push(dir);
 		}
 		return prev;

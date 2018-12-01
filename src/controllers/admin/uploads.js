@@ -88,9 +88,9 @@ function buildBreadcrumbs(currentFolder) {
 		var dir = path.join(currentPath, part);
 		crumbs.push({
 			text: part || 'Uploads',
-			url: part
-				? (nconf.get('relative_path') + '/admin/manage/uploads?dir=' + dir)
-				: nconf.get('relative_path') + '/admin/manage/uploads',
+			url: part ?
+				(nconf.get('relative_path') + '/admin/manage/uploads?dir=' + dir) :
+				nconf.get('relative_path') + '/admin/manage/uploads',
 		});
 		currentPath = dir;
 	});
@@ -261,7 +261,7 @@ function upload(name, req, res, next) {
 }
 
 function validateUpload(req, res, next, uploadedFile, allowedTypes) {
-	if (allowedTypes.indexOf(uploadedFile.type) === -1) {
+	if (!allowedTypes.includes(uploadedFile.type)) {
 		file.delete(uploadedFile.path);
 		res.json({ error: '[[error:invalid-image-type, ' + allowedTypes.join('&#44; ') + ']]' });
 		return false;
@@ -317,4 +317,3 @@ function uploadImage(filename, folder, uploadedFile, req, res, next) {
 		res.json([{ name: uploadedFile.name, url: image.url.startsWith('http') ? image.url : nconf.get('relative_path') + image.url }]);
 	});
 }
-

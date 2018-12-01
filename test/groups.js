@@ -206,6 +206,22 @@ describe('Groups', function () {
 				done();
 			});
 		});
+
+		it('should return true for uid 0 and guests group', function (done) {
+			Groups.isMembers([1, 0], 'guests', function (err, isMembers) {
+				assert.ifError(err);
+				assert.deepStrictEqual(isMembers, [false, true]);
+				done();
+			});
+		});
+
+		it('should return true for uid 0 and guests group', function (done) {
+			Groups.isMemberOfGroups(0, ['guests', 'registered-users'], function (err, isMembers) {
+				assert.ifError(err);
+				assert.deepStrictEqual(isMembers, [true, false]);
+				done();
+			});
+		});
 	});
 
 	describe('.isMemberOfGroupList', function () {
@@ -333,6 +349,20 @@ describe('Groups', function () {
 				done();
 			});
 		});
+
+		it('should return falsy for userTitleEnabled', function (done) {
+			Groups.create({ name: 'userTitleEnabledGroup' }, function (err) {
+				assert.ifError(err);
+				Groups.setGroupField('userTitleEnabledGroup', 'userTitleEnabled', 0, function (err) {
+					assert.ifError(err);
+					Groups.getGroupData('userTitleEnabledGroup', function (err, data) {
+						assert.ifError(err);
+						assert.strictEqual(data.userTitleEnabled, 0);
+						done();
+					});
+				});
+			});
+		});
 	});
 
 	describe('.hide()', function () {
@@ -342,7 +372,7 @@ describe('Groups', function () {
 
 				Groups.get('foo', {}, function (err, groupObj) {
 					assert.ifError(err);
-					assert.strictEqual(true, groupObj.hidden);
+					assert.strictEqual(1, groupObj.hidden);
 					done();
 				});
 			});
@@ -426,7 +456,6 @@ describe('Groups', function () {
 				Groups.get('foobar?', {}, function (err, groupObj) {
 					assert.ifError(err);
 					assert.strictEqual(groupObj, null);
-
 					done();
 				});
 			});
@@ -435,11 +464,42 @@ describe('Groups', function () {
 		it('should also remove the members set', function (done) {
 			db.exists('group:foo:members', function (err, exists) {
 				assert.ifError(err);
-
 				assert.strictEqual(false, exists);
-
 				done();
 			});
+		});
+
+		it('should remove group from privilege groups', function (done) {
+			const privileges = require('../src/privileges');
+			const cid = 1;
+			const groupName = '1';
+			const uid = 1;
+			async.waterfall([
+				function (next) {
+					Groups.create({ name: groupName }, next);
+				},
+				function (groupData, next) {
+					privileges.categories.give(['topics:create'], cid, groupName, next);
+				},
+				function (next) {
+					Groups.isMember(groupName, 'cid:1:privileges:groups:topics:create', next);
+				},
+				function (isMember, next) {
+					assert(isMember);
+					Groups.destroy(groupName, next);
+				},
+				function (next) {
+					Groups.isMember(groupName, 'cid:1:privileges:groups:topics:create', next);
+				},
+				function (isMember, next) {
+					assert(!isMember);
+					Groups.isMember(uid, 'registered-users', next);
+				},
+				function (isMember, next) {
+					assert(isMember);
+					next();
+				},
+			], done);
 		});
 	});
 
@@ -1325,7 +1385,7 @@ describe('Groups', function () {
 		it('should remove cover', function (done) {
 			socketGroups.cover.remove({ uid: adminUid }, { groupName: 'Test' }, function (err) {
 				assert.ifError(err);
-				Groups.getGroupFields('Test', ['cover:url'], function (err, groupData) {
+				db.getObjectFields('group:Test', ['cover:url'], function (err, groupData) {
 					assert.ifError(err);
 					assert(!groupData['cover:url']);
 					done();

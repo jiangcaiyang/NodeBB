@@ -95,7 +95,7 @@ describe('Upload Controllers', function () {
 				assert.equal(res.statusCode, 200);
 				assert(Array.isArray(body));
 				assert(body[0].url);
-				var name = body[0].url.replace(nconf.get('upload_url'), '');
+				var name = body[0].url.replace(nconf.get('relative_path') + nconf.get('upload_url'), '');
 				socketUser.deleteUpload({ uid: regularUid }, { uid: regularUid, name: name }, function (err) {
 					assert.ifError(err);
 					db.getSortedSetRange('uid:' + regularUid + ':uploads', 0, -1, function (err, uploads) {
@@ -108,15 +108,17 @@ describe('Upload Controllers', function () {
 		});
 
 		it('should resize and upload an image to a post', function (done) {
-			var oldValue = meta.config.maximumImageWidth;
-			meta.config.maximumImageWidth = 10;
+			var oldValue = meta.config.resizeImageWidth;
+			meta.config.resizeImageWidth = 10;
+			meta.config.resizeImageWidthThreshold = 10;
 			helpers.uploadFile(nconf.get('url') + '/api/post/upload', path.join(__dirname, '../test/files/test.png'), {}, jar, csrf_token, function (err, res, body) {
 				assert.ifError(err);
 				assert.equal(res.statusCode, 200);
 				assert(Array.isArray(body));
 				assert(body[0].url);
 				assert(body[0].url.match(/\/assets\/uploads\/files\/\d+-test-resized\.png/));
-				meta.config.maximumImageWidth = oldValue;
+				meta.config.resizeImageWidth = oldValue;
+				meta.config.resizeImageWidthThreshold = 1520;
 				done();
 			});
 		});

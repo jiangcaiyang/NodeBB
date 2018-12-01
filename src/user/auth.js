@@ -13,7 +13,7 @@ module.exports = function (User) {
 	User.auth = {};
 
 	User.auth.logAttempt = function (uid, ip, callback) {
-		if (!parseInt(uid, 10)) {
+		if (parseInt(uid, 10) <= 0) {
 			return setImmediate(callback);
 		}
 		async.waterfall([
@@ -26,16 +26,15 @@ module.exports = function (User) {
 				}
 				db.increment('loginAttempts:' + uid, next);
 			},
-			function (attemps, next) {
-				var loginAttempts = parseInt(meta.config.loginAttempts, 10) || 5;
-				if (attemps <= loginAttempts) {
+			function (attempts, next) {
+				if (attempts <= meta.config.loginAttempts) {
 					return db.pexpire('loginAttempts:' + uid, 1000 * 60 * 60, callback);
 				}
 				// Lock out the account
 				db.set('lockout:' + uid, '', next);
 			},
 			function (next) {
-				var duration = 1000 * 60 * (meta.config.lockoutDuration || 60);
+				var duration = 1000 * 60 * meta.config.lockoutDuration;
 
 				db.delete('loginAttempts:' + uid);
 				db.pexpire('lockout:' + uid, duration);
@@ -50,8 +49,8 @@ module.exports = function (User) {
 	};
 
 	User.auth.getFeedToken = function (uid, callback) {
-		if (!uid) {
-			return callback();
+		if (parseInt(uid, 10) <= 0) {
+			return setImmediate(callback);
 		}
 		var token;
 		async.waterfall([
