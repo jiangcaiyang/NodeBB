@@ -112,7 +112,13 @@ app.cacheBuster = null;
 		 *   config (obj)
 		 *   next (string)
 		 */
-		require(['benchpress', 'translator', 'forum/header/notifications', 'forum/header/chat'], function (Benchpress, translator, Notifications, Chat) {
+		require([
+			'benchpress',
+			'translator',
+			'forum/unread',
+			'forum/header/notifications',
+			'forum/header/chat',
+		], function (Benchpress, translator, Unread, Notifications, Chat) {
 			app.user = data.header.user;
 			data.header.config = data.config;
 			config = data.config;
@@ -136,7 +142,7 @@ app.cacheBuster = null;
 				Object.values(toRender).forEach(function (element, idx) {
 					element.html(html[idx]);
 				});
-
+				Unread.initUnreadTopics();
 				Notifications.prepareDOM();
 				Chat.prepareDOM();
 				app.reskin(data.config.bootswatchSkin);
@@ -747,7 +753,9 @@ app.cacheBuster = null;
 		var clientEl = Array.prototype.filter.call(document.querySelectorAll('link[rel="stylesheet"]'), function (el) {
 			return el.href.indexOf(config.relative_path + '/assets/client') !== -1;
 		})[0] || null;
-
+		if (!clientEl) {
+			return;
+		}
 		// Update client.css link element to point to selected skin variant
 		clientEl.href = config.relative_path + '/assets/client' + (skinName ? '-' + skinName : '') + '.css';
 

@@ -194,8 +194,8 @@ module.exports = function (Topics) {
 					isTopicsFollowed: function (next) {
 						db.sortedSetScores('uid:' + uid + ':followed_tids', tids, next);
 					},
-					ignoredCids: function (next) {
-						user.getIgnoredCategories(uid, next);
+					categoryWatchState: function (next) {
+						categories.getWatchState(cids, uid, next);
 					},
 					readableCids: function (next) {
 						privileges.categories.filterCids('read', cids, uid, next);
@@ -205,6 +205,7 @@ module.exports = function (Topics) {
 			function (results, next) {
 				cid = cid && cid.map(String);
 				results.readableCids = results.readableCids.map(String);
+				const userCidState = _.zipObject(cids, results.categoryWatchState);
 
 				topicData.forEach(function (topic, index) {
 					function cidMatch(topicCid) {
@@ -213,27 +214,27 @@ module.exports = function (Topics) {
 
 					if (topic && topic.cid && cidMatch(topic.cid) && !blockedUids.includes(parseInt(topic.uid, 10))) {
 						topic.tid = parseInt(topic.tid, 10);
-						if ((results.isTopicsFollowed[index] || !results.ignoredCids.includes(String(topic.cid)))) {
-							counts[''] += 1;
+						if ((results.isTopicsFollowed[index] || userCidState[topic.cid] === categories.watchStates.watching)) {
 							tidsByFilter[''].push(topic.tid);
 						}
 
 						if (results.isTopicsFollowed[index]) {
-							counts.watched += 1;
 							tidsByFilter.watched.push(topic.tid);
 						}
 
 						if (topic.postcount <= 1) {
-							counts.unreplied += 1;
 							tidsByFilter.unreplied.push(topic.tid);
 						}
 
 						if (!userRead[topic.tid]) {
-							counts.new += 1;
 							tidsByFilter.new.push(topic.tid);
 						}
 					}
 				});
+				counts[''] = tidsByFilter[''].length;
+				counts.watched = tidsByFilter.watched.length;
+				counts.unreplied = tidsByFilter.unreplied.length;
+				counts.new = tidsByFilter.new.length;
 
 				next(null, {
 					counts: counts,
@@ -438,10 +439,8 @@ module.exports = function (Topics) {
 	};
 
 	Topics.hasReadTopics = function (tids, uid, callback) {
-		if (!parseInt(uid, 10)) {
-			return callback(null, tids.map(function () {
-				return false;
-			}));
+		if (!(parseInt(uid, 10) > 0)) {
+			return setImmediate(callback, null, tids.map(() => false));
 		}
 
 		async.waterfall([

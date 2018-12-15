@@ -348,7 +348,7 @@ SELECT z."score" s
 
 	module.sortedSetsScore = function (keys, value, callback) {
 		if (!Array.isArray(keys) || !keys.length) {
-			return callback();
+			return callback(null, []);
 		}
 
 		value = helpers.valueToString(value);
@@ -473,8 +473,8 @@ SELECT z."value" v
 	};
 
 	module.isMemberOfSortedSets = function (keys, value, callback) {
-		if (!Array.isArray(keys)) {
-			return callback();
+		if (!Array.isArray(keys) || !keys.length) {
+			return setImmediate(callback, null, []);
 		}
 
 		value = helpers.valueToString(value);
