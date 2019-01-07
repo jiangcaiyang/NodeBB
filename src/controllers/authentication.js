@@ -19,7 +19,6 @@ var privileges = require('../privileges');
 var sockets = require('../socket.io');
 
 var authenticationController = module.exports;
-var apiController = require('./api');
 
 authenticationController.register = function (req, res) {
 	var registrationType = meta.config.registrationType || 'normal';
@@ -286,10 +285,10 @@ function continueLogin(req, res, next) {
 		} else {
 			delete req.query.lang;
 
-			async.parallel({
+			async.series({
 				doLogin: async.apply(authenticationController.doLogin, req, userData.uid),
+				buildHeader: async.apply(middleware.buildHeader, req, res),
 				header: async.apply(middleware.generateHeader, req, res, {}),
-				config: async.apply(apiController.loadConfig, req),
 			}, function (err, payload) {
 				if (err) {
 					return helpers.noScriptErrors(req, res, err.message, 403);
@@ -309,7 +308,7 @@ function continueLogin(req, res, next) {
 					res.status(200).send({
 						next: destination,
 						header: payload.header,
-						config: payload.config,
+						config: res.locals.config,
 					});
 				}
 			});
@@ -474,6 +473,7 @@ authenticationController.logout = function (req, res, next) {
 			req.logout();
 			req.session.regenerate(function (err) {
 				req.uid = 0;
+				req.headers['x-csrf-token'] = req.csrfToken();
 				next(err);
 			});
 		},
@@ -483,15 +483,16 @@ authenticationController.logout = function (req, res, next) {
 		function (next) {
 			plugins.fireHook('static:user.loggedOut', { req: req, res: res, uid: req.uid }, next);
 		},
+		async.apply(middleware.autoLocale, req, res),
 		function () {
 			// Force session check for all connected socket.io clients with the same session id
 			sockets.in('sess_' + req.sessionID).emit('checkSession', 0);
 			if (req.body.noscript === 'true') {
 				res.redirect(nconf.get('relative_path') + '/');
 			} else {
-				async.parallel({
+				async.series({
+					buildHeader: async.apply(middleware.buildHeader, req, res),
 					header: async.apply(middleware.generateHeader, req, res, {}),
-					config: async.apply(apiController.loadConfig, req),
 				}, function (err, payload) {
 					if (err) {
 						return res.status(500);
@@ -499,7 +500,7 @@ authenticationController.logout = function (req, res, next) {
 
 					res.status(200).send({
 						header: payload.header,
-						config: payload.config,
+						config: res.locals.config,
 					});
 				});
 			}

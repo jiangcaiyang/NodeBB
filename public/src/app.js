@@ -124,6 +124,10 @@ app.cacheBuster = null;
 			config = data.config;
 			Benchpress.setGlobal('config', config);
 
+			var htmlEl = $('html');
+			htmlEl.attr('data-dir', data.header.languageDirection);
+			htmlEl.css('direction', data.header.languageDirection);
+
 			// Manually reconnect socket.io
 			socket.close();
 			socket.open();
@@ -147,6 +151,8 @@ app.cacheBuster = null;
 				Chat.prepareDOM();
 				app.reskin(data.config.bootswatchSkin);
 				translator.switchTimeagoLanguage(callback);
+				bootbox.setLocale(config.userLang);
+				$(window).trigger('action:app.updateHeader');
 			});
 		});
 	};
@@ -236,6 +242,8 @@ app.cacheBuster = null;
 		app.flags = app.flags || {};
 		app.flags._sessionRefresh = true;
 
+		socket.disconnect();
+
 		require(['translator'], function (translator) {
 			translator.translate('[[error:invalid-session-text]]', function (translated) {
 				bootbox.alert({
@@ -283,12 +291,12 @@ app.cacheBuster = null;
 	};
 
 	function highlightNavigationLink() {
-		var path = window.location.pathname + window.location.search;
-		$('#main-nav li').removeClass('active');
-		if (path) {
-			$('#main-nav li').removeClass('active').find('a[href="' + path + '"]').parent()
-				.addClass('active');
-		}
+		$('#main-nav li')
+			.removeClass('active')
+			.find('a')
+			.filter(function (i, x) { return window.location.pathname.startsWith(x.getAttribute('href')); })
+			.parent()
+			.addClass('active');
 	}
 
 	app.createUserTooltips = function (els, placement) {
@@ -756,15 +764,24 @@ app.cacheBuster = null;
 		if (!clientEl) {
 			return;
 		}
-		// Update client.css link element to point to selected skin variant
-		clientEl.href = config.relative_path + '/assets/client' + (skinName ? '-' + skinName : '') + '.css';
 
-		var currentSkinClassName = $('body').attr('class').split(/\s+/).filter(function (className) {
-			return className.startsWith('skin-');
-		});
-		$('body').removeClass(currentSkinClassName.join(' '));
-		if (skinName) {
-			$('body').addClass('skin-' + skinName);
-		}
+		var linkEl = document.createElement('link');
+		linkEl.rel = 'stylesheet';
+		linkEl.type = 'text/css';
+		linkEl.href = config.relative_path + '/assets/client' + (skinName ? '-' + skinName : '') + '.css';
+		linkEl.onload = function () {
+			clientEl.parentNode.removeChild(clientEl);
+
+			// Update body class with proper skin name
+			var currentSkinClassName = $('body').attr('class').split(/\s+/).filter(function (className) {
+				return className.startsWith('skin-');
+			});
+			$('body').removeClass(currentSkinClassName.join(' '));
+			if (skinName) {
+				$('body').addClass('skin-' + skinName);
+			}
+		};
+
+		document.head.appendChild(linkEl);
 	};
 }());
