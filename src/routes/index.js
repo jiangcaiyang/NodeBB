@@ -35,6 +35,7 @@ function mainRoutes(app, middleware, controllers) {
 	setupPageRoute(app, '/tos', middleware, [], controllers.termsOfUse);
 
 	app.post('/compose', middleware.applyCSRF, controllers.composer.post);
+	app.post('/email/unsubscribe/:token', controllers.accounts.settings.unsubscribe);
 }
 
 function modRoutes(app, middleware, controllers) {
@@ -186,7 +187,6 @@ function addCoreRoutes(app, router, middleware, callback) {
 		res.redirect(relativePath + '/assets/client.css?' + meta.config['cache-buster']);
 	});
 
-	app.use(relativePath + '/assets/vendor/jquery/timeago/locales', middleware.processTimeagoLocales);
 	app.use(controllers['404'].handle404);
 	app.use(controllers.errors.handleURIErrors);
 	app.use(controllers.errors.handleErrors);
