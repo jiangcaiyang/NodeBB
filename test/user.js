@@ -60,6 +60,17 @@ describe('User', function () {
 			});
 		});
 
+		it('should be created properly', function (done) {
+			User.create({ username: 'weirdemail', email: '<h1>test</h1>@gmail.com' }, function (err, uid) {
+				assert.ifError(err);
+				User.getUserData(uid, function (err, data) {
+					assert.ifError(err);
+					assert.equal(data.email, '&lt;h1&gt;test&lt;&#x2F;h1&gt;@gmail.com');
+					done();
+				});
+			});
+		});
+
 		it('should have a valid email, if using an email', function (done) {
 			User.create({ username: userData.username, password: userData.password, email: 'fakeMail' }, function (err) {
 				assert(err);
@@ -1638,7 +1649,7 @@ describe('User', function () {
 		});
 
 		it('should reject user registration', function (done) {
-			socketAdmin.user.rejectRegistration({ uid: adminUid }, { username: 'rejectme' }, function (err) {
+			socketUser.rejectRegistration({ uid: adminUid }, { username: 'rejectme' }, function (err) {
 				assert.ifError(err);
 				User.getRegistrationQueue(0, -1, function (err, users) {
 					assert.ifError(err);
@@ -1657,7 +1668,7 @@ describe('User', function () {
 				gdpr_consent: true,
 			}, function (err) {
 				assert.ifError(err);
-				socketAdmin.user.acceptRegistration({ uid: adminUid }, { username: 'acceptme' }, function (err, uid) {
+				socketUser.acceptRegistration({ uid: adminUid }, { username: 'acceptme' }, function (err, uid) {
 					assert.ifError(err);
 					User.exists(uid, function (err, exists) {
 						assert.ifError(err);
@@ -1676,15 +1687,17 @@ describe('User', function () {
 	describe('invites', function () {
 		var socketUser = require('../src/socket.io/user');
 		var inviterUid;
+		var adminUid;
 
 		before(function (done) {
-			User.create({
-				username: 'inviter',
-				email: 'inviter@nodebb.org',
-			}, function (err, uid) {
+			async.parallel({
+				inviter: async.apply(User.create, { username: 'inviter', email: 'inviter@nodebb.org' }),
+				admin: async.apply(User.create, { username: 'adminInvite' }),
+			}, function (err, results) {
 				assert.ifError(err);
-				inviterUid = uid;
-				done();
+				inviterUid = results.inviter;
+				adminUid = results.admin;
+				groups.join('administrators', adminUid, done);
 			});
 		});
 
@@ -1793,8 +1806,8 @@ describe('User', function () {
 		});
 
 		it('should delete invitation', function (done) {
-			var socketAdmin = require('../src/socket.io/admin');
-			socketAdmin.user.deleteInvitation({ uid: inviterUid }, { invitedBy: 'inviter', email: 'invite1@test.com' }, function (err) {
+			var socketUser = require('../src/socket.io/user');
+			socketUser.deleteInvitation({ uid: adminUid }, { invitedBy: 'inviter', email: 'invite1@test.com' }, function (err) {
 				assert.ifError(err);
 				db.isSetMember('invitation:uid:' + inviterUid, 'invite1@test.com', function (err, isMember) {
 					assert.ifError(err);

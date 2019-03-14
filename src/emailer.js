@@ -142,7 +142,7 @@ Emailer.registerApp = function (expressApp) {
 	app = expressApp;
 
 	var logo = null;
-	if (meta.configs.hasOwnProperty('brand:emailLogo')) {
+	if (meta.config.hasOwnProperty('brand:emailLogo')) {
 		logo = (!meta.config['brand:emailLogo'].startsWith('http') ? nconf.get('url') : '') + meta.config['brand:emailLogo'];
 	}
 
@@ -195,15 +195,18 @@ Emailer.send = function (template, uid, params, callback) {
 				settings: async.apply(User.getSettings, uid),
 			}, next);
 		},
-		function (results, next) {
+		async function (results) {
 			if (!results.email) {
 				winston.warn('uid : ' + uid + ' has no email, not sending.');
-				return next();
+				return;
 			}
 			params.uid = uid;
-			Emailer.sendToEmail(template, results.email, results.settings.userLang, params, next);
+			params.rtl = await translator.translate('[[language:dir]]', results.settings.userLang) === 'rtl';
+			Emailer.sendToEmail(template, results.email, results.settings.userLang, params, function () {});
 		},
-	], callback);
+	], function (err) {
+		return callback(err);
+	});
 };
 
 Emailer.sendToEmail = function (template, email, language, params, callback) {
@@ -282,6 +285,7 @@ Emailer.sendToEmail = function (template, email, language, params, callback) {
 				pid: params.pid,
 				fromUid: params.fromUid,
 				headers: params.headers,
+				rtl: params.rtl,
 			};
 			Plugins.fireHook('filter:email.modify', data, next);
 		},

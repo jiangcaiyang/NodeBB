@@ -173,7 +173,7 @@ authenticationController.registerComplete = function (req, res, next) {
 				return res.redirect(nconf.get('relative_path') + '/?register=' + encodeURIComponent(data.message));
 			}
 			if (req.session.returnTo) {
-				res.redirect(req.session.returnTo);
+				res.redirect(nconf.get('relative_path') + req.session.returnTo);
 			} else {
 				res.redirect(nconf.get('relative_path') + '/');
 			}
@@ -331,6 +331,15 @@ authenticationController.doLogin = function (req, uid, callback) {
 };
 
 authenticationController.onSuccessfulLogin = function (req, uid, callback) {
+	// If already called once, return prematurely
+	if (req.res.locals.user) {
+		if (typeof callback === 'function') {
+			return setImmediate(callback);
+		}
+
+		return true;
+	}
+
 	var uuid = utils.generateUUID();
 
 	req.uid = uid;
@@ -392,7 +401,7 @@ authenticationController.onSuccessfulLogin = function (req, uid, callback) {
 		if (typeof callback === 'function') {
 			callback(err);
 		} else {
-			return false;
+			return !!err;
 		}
 	});
 };
@@ -478,7 +487,10 @@ authenticationController.logout = function (req, res, next) {
 			});
 		},
 		function (next) {
-			user.setUserField(req.uid, 'lastonline', Date.now() - 300000, next);
+			user.setUserField(req.uid, 'lastonline', Date.now() - (meta.config.onlineCutoff * 60000), next);
+		},
+		function (next) {
+			db.sortedSetRemove('users:online', req.uid, next);
 		},
 		function (next) {
 			plugins.fireHook('static:user.loggedOut', { req: req, res: res, uid: req.uid }, next);
@@ -498,10 +510,12 @@ authenticationController.logout = function (req, res, next) {
 						return res.status(500);
 					}
 
-					res.status(200).send({
+					payload = {
 						header: payload.header,
 						config: res.locals.config,
-					});
+					};
+					plugins.fireHook('filter:user.logout', payload);
+					res.status(200).send(payload);
 				});
 			}
 		},

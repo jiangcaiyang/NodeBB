@@ -99,7 +99,7 @@ module.exports = function (Plugins) {
 		}
 		var hookList = Plugins.loadedHooks[hook];
 		var hookType = hook.split(':')[0];
-		winston.verbose('[plugins/fireHook]', hook);
+		winston.verbose('[plugins/fireHook] ' + hook);
 		switch (hookType) {
 		case 'filter':
 			fireFilterHook(hook, hookList, params, done);
@@ -109,6 +109,9 @@ module.exports = function (Plugins) {
 			break;
 		case 'static':
 			fireStaticHook(hook, hookList, params, done);
+			break;
+		case 'response':
+			fireResponseHook(hook, hookList, params, done);
 			break;
 		default:
 			winston.warn('[plugins] Unknown hookType: ' + hookType + ', hook : ' + hook);
@@ -181,6 +184,28 @@ module.exports = function (Plugins) {
 			} else {
 				next();
 			}
+		}, callback);
+	}
+
+	function fireResponseHook(hook, hookList, params, callback) {
+		if (!Array.isArray(hookList) || !hookList.length) {
+			return callback();
+		}
+		async.eachSeries(hookList, function (hookObj, next) {
+			if (typeof hookObj.method !== 'function') {
+				if (global.env === 'development') {
+					winston.warn('[plugins] Expected method for hook \'' + hook + '\' in plugin \'' + hookObj.id + '\' not found, skipping.');
+				}
+				return next();
+			}
+
+			// Skip remaining hooks if headers have been sent
+			if (params.res.headersSent) {
+				return next();
+			}
+
+			hookObj.method(params);
+			next();
 		}, callback);
 	}
 
