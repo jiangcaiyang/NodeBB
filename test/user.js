@@ -578,6 +578,14 @@ describe('User', function () {
 			});
 		});
 
+		it('should not return password even if explicitly requested', function (done) {
+			User.getUserFields(testUid, ['password'], function (err, payload) {
+				assert.ifError(err);
+				assert(!payload.hasOwnProperty('password'));
+				done();
+			});
+		});
+
 		it('should return private data if field is whitelisted', function (done) {
 			function filterMethod(data, callback) {
 				data.whitelist.push('another_secret');
@@ -1114,7 +1122,7 @@ describe('User', function () {
 		it('should return the correct ban reason', function (done) {
 			async.series([
 				function (next) {
-					User.ban(testUid, 0, '', function (err) {
+					User.bans.ban(testUid, 0, '', function (err) {
 						assert.ifError(err);
 						next(err);
 					});
@@ -1130,7 +1138,7 @@ describe('User', function () {
 				},
 			], function (err) {
 				assert.ifError(err);
-				User.unban(testUid, function (err) {
+				User.bans.unban(testUid, function (err) {
 					assert.ifError(err);
 					done();
 				});
@@ -1138,28 +1146,28 @@ describe('User', function () {
 		});
 
 		it('should ban user permanently', function (done) {
-			User.ban(testUid, function (err) {
+			User.bans.ban(testUid, function (err) {
 				assert.ifError(err);
-				User.isBanned(testUid, function (err, isBanned) {
+				User.bans.isBanned(testUid, function (err, isBanned) {
 					assert.ifError(err);
 					assert.equal(isBanned, true);
-					User.unban(testUid, done);
+					User.bans.unban(testUid, done);
 				});
 			});
 		});
 
 		it('should ban user temporarily', function (done) {
-			User.ban(testUid, Date.now() + 2000, function (err) {
+			User.bans.ban(testUid, Date.now() + 2000, function (err) {
 				assert.ifError(err);
 
-				User.isBanned(testUid, function (err, isBanned) {
+				User.bans.isBanned(testUid, function (err, isBanned) {
 					assert.ifError(err);
 					assert.equal(isBanned, true);
 					setTimeout(function () {
-						User.isBanned(testUid, function (err, isBanned) {
+						User.bans.isBanned(testUid, function (err, isBanned) {
 							assert.ifError(err);
 							assert.equal(isBanned, false);
-							User.unban(testUid, done);
+							User.bans.unban(testUid, done);
 						});
 					}, 3000);
 				});
@@ -1167,7 +1175,7 @@ describe('User', function () {
 		});
 
 		it('should error if until is NaN', function (done) {
-			User.ban(testUid, 'asd', function (err) {
+			User.bans.ban(testUid, 'asd', function (err) {
 				assert.equal(err.message, '[[error:ban-expiry-missing]]');
 				done();
 			});
