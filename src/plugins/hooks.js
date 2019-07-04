@@ -1,11 +1,12 @@
 'use strict';
 
-var winston = require('winston');
-var async = require('async');
+const winston = require('winston');
+const async = require('async');
+const utils = require('../utils');
 
 module.exports = function (Plugins) {
 	Plugins.deprecatedHooks = {
-
+		'filter:controllers.topic.get': 'filter:topic.build',
 	};
 
 	Plugins.internals = {
@@ -33,7 +34,7 @@ module.exports = function (Plugins) {
 
 		var method;
 
-		if (Object.keys(Plugins.deprecatedHooks).includes(data.hook)) {
+		if (Plugins.deprecatedHooks[data.hook]) {
 			winston.warn('[plugins/' + id + '] Hook `' + data.hook + '` is deprecated, ' +
 				(Plugins.deprecatedHooks[data.hook] ?
 					'please use `' + Plugins.deprecatedHooks[data.hook] + '` instead.' :
@@ -99,7 +100,9 @@ module.exports = function (Plugins) {
 		}
 		var hookList = Plugins.loadedHooks[hook];
 		var hookType = hook.split(':')[0];
-		winston.verbose('[plugins/fireHook] ' + hook);
+		if (hook !== 'action:plugins.fireHook') {
+			winston.verbose('[plugins/fireHook] ' + hook);
+		}
 		switch (hookType) {
 		case 'filter':
 			fireFilterHook(hook, hookList, params, done);
@@ -132,8 +135,13 @@ module.exports = function (Plugins) {
 				}
 				return next(null, params);
 			}
-
-			hookObj.method(params, next);
+			const returned = hookObj.method(params, next);
+			if (utils.isPromise(returned)) {
+				returned.then(
+					payload => setImmediate(next, null, payload),
+					err => setImmediate(next, err)
+				);
+			}
 		}, callback);
 	}
 
@@ -160,26 +168,35 @@ module.exports = function (Plugins) {
 		}
 		async.each(hookList, function (hookObj, next) {
 			if (typeof hookObj.method === 'function') {
-				var timedOut = false;
-
-				var timeoutId = setTimeout(function () {
+				let timedOut = false;
+				const timeoutId = setTimeout(function () {
 					winston.warn('[plugins] Callback timed out, hook \'' + hook + '\' in plugin \'' + hookObj.id + '\'');
 					timedOut = true;
 					next();
 				}, 5000);
 
-				try {
-					hookObj.method(params, function () {
-						clearTimeout(timeoutId);
-						if (!timedOut) {
-							next.apply(null, arguments);
-						}
-					});
-				} catch (err) {
+				const onError = (err) => {
 					winston.error('[plugins] Error executing \'' + hook + '\' in plugin \'' + hookObj.id + '\'');
 					winston.error(err);
 					clearTimeout(timeoutId);
 					next();
+				};
+				const callback = (...args) => {
+					clearTimeout(timeoutId);
+					if (!timedOut) {
+						next(...args);
+					}
+				};
+				try {
+					const returned = hookObj.method(params, callback);
+					if (utils.isPromise(returned)) {
+						returned.then(
+							payload => setImmediate(callback, null, payload),
+							err => setImmediate(onError, err)
+						);
+					}
+				} catch (err) {
+					onError(err);
 				}
 			} else {
 				next();

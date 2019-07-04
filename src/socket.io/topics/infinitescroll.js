@@ -3,6 +3,7 @@
 var async = require('async');
 
 var topics = require('../../topics');
+const categories = require('../../categories');
 var privileges = require('../../privileges');
 var meta = require('../../meta');
 var utils = require('../../utils');
@@ -33,26 +34,17 @@ module.exports = function (SocketTopics) {
 
 				userPrivileges = results.privileges;
 
-				var set = 'tid:' + data.tid + ':posts';
-				if (data.topicPostSort === 'most_votes') {
-					set = 'tid:' + data.tid + ':posts:votes';
-				}
+				var set = data.topicPostSort === 'most_votes' ? 'tid:' + data.tid + ':posts:votes' : 'tid:' + data.tid + ':posts';
 				var reverse = data.topicPostSort === 'newest_to_oldest' || data.topicPostSort === 'most_votes';
 				var start = Math.max(0, parseInt(data.after, 10));
 
-				var infScrollPostsPerPage = Math.max(0, Math.min(meta.config.postsPerPage || 20, parseInt(data.count, 10) || meta.config.postsPerPage || 20) - 1);
+				var infScrollPostsPerPage = Math.max(0, Math.min(meta.config.postsPerPage || 20, parseInt(data.count, 10) || meta.config.postsPerPage || 20));
 
-				if (data.direction > 0) {
-					if (reverse) {
-						start = results.topic.postcount - start;
-					}
-				} else if (reverse) {
-					start = results.topic.postcount - start - infScrollPostsPerPage;
-				} else {
-					start -= infScrollPostsPerPage;
+				if (data.direction === -1) {
+					start -= (infScrollPostsPerPage + 1);
 				}
 
-				var stop = start + (infScrollPostsPerPage);
+				var stop = start + infScrollPostsPerPage - 1;
 
 				start = Math.max(0, start);
 				stop = Math.max(0, stop);
@@ -115,6 +107,18 @@ module.exports = function (SocketTopics) {
 		}
 		const { start, stop } = calculateStartStop(data);
 		topics.getTopicsFromSet(data.set, socket.uid, start, stop, callback);
+	};
+
+	SocketTopics.loadMoreUserTopics = function (socket, data, callback) {
+		async.waterfall([
+			function (next) {
+				categories.getCidsByPrivilege('categories:cid', socket.uid, 'topics:read', next);
+			},
+			function (cids, next) {
+				data.set = cids.map(c => 'cid:' + c + ':uid:' + data.uid + ':tids');
+				SocketTopics.loadMoreFromSet(socket, data, next);
+			},
+		], callback);
 	};
 
 	function calculateStartStop(data) {

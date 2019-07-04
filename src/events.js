@@ -48,6 +48,7 @@ events.types = [
 	'export:uploads',
 	'account-locked',
 	'getUsersCSV',
+	// To add new types from plugins, just Array.push() to this array
 ];
 
 /**
@@ -67,10 +68,10 @@ events.log = function (data, callback) {
 
 			async.parallel([
 				function (next) {
-					db.sortedSetAdd('events:time', data.timestamp, eid, next);
-				},
-				function (next) {
-					db.sortedSetAdd('events:time:' + data.type, data.timestamp, eid, next);
+					db.sortedSetsAdd([
+						'events:time',
+						'events:time:' + data.type,
+					], data.timestamp, eid, next);
 				},
 				function (next) {
 					db.setObject('event:' + eid, data, next);
@@ -82,10 +83,17 @@ events.log = function (data, callback) {
 	});
 };
 
-events.getEvents = function (filter, start, stop, callback) {
+events.getEvents = function (filter, start, stop, from, to, callback) {
+	// from/to optional
+	if (typeof from === 'function' && !to && !callback) {
+		callback = from;
+		from = 0;
+		to = Date.now();
+	}
+
 	async.waterfall([
 		function (next) {
-			db.getSortedSetRevRange('events:time' + (filter ? ':' + filter : ''), start, stop, next);
+			db.getSortedSetRevRangeByScore('events:time' + (filter ? ':' + filter : ''), start, stop - start + 1, to, from, next);
 		},
 		function (eids, next) {
 			db.getObjects(eids.map(eid => 'event:' + eid), next);
@@ -185,9 +193,14 @@ events.deleteAll = function (callback) {
 	}, { alwaysStartAt: 0 }, callback);
 };
 
-events.output = function () {
-	console.log('\nDisplaying last ten administrative events...'.bold);
-	events.getEvents('', 0, 9, function (err, events) {
+events.output = function (numEvents) {
+	numEvents = parseInt(numEvents, 10);
+	if (isNaN(numEvents)) {
+		numEvents = 10;
+	}
+
+	console.log(('\nDisplaying last ' + numEvents + ' administrative events...').bold);
+	events.getEvents('', 0, numEvents - 1, function (err, events) {
 		if (err) {
 			winston.error('Error fetching events', err);
 			throw err;

@@ -27,12 +27,14 @@
     "maximumTagLength": 15,
     "allowTopicsThumbnail": 0,
     "registrationType": "normal",
+    "registrationApprovalType": "normal",
     "allowAccountDelete": 1,
     "allowFileUploads": 0,
     "allowedFileExtensions": "png,jpg,bmp",
     "allowUserHomePage": 1,
     "allowMultipleBadges": 0,
     "maximumFileSize": 2048,
+    "stripEXIFData": 1,
     "resizeImageWidthThreshold": 2000,
     "resizeImageWidth": 760,
     "rejectImageWidth": 5000,
@@ -95,6 +97,7 @@
     "feeds:disableSitemap": 0,
     "sitemapTopics": 500,
     "maintenanceMode": 0,
+    "maintenanceModeStatus": 503,
     "votesArePublic": 0,
     "maximumInvites": 0,
     "username:disableEdit": 0,
@@ -119,5 +122,6 @@
     "eventLoopInterval": 500,
     "onlineCutoff": 30,
     "timeagoCutoff": 30,
-    "categoryWatchState": "watching"
+    "categoryWatchState": "watching",
+    "submitPluginUsage": 1
 }

@@ -159,31 +159,17 @@ module.exports = function (db, module) {
 		if (!Array.isArray(keys) || !keys.length) {
 			return callback(null, []);
 		}
-		var pipeline = [
-			{ $match: { _key: { $in: keys } } },
-			{ $group: { _id: { _key: '$_key' }, count: { $sum: 1 } } },
-			{ $project: { _id: 1, count: '$count' } },
-		];
-		db.collection('objects').aggregate(pipeline).toArray(function (err, results) {
-			if (err) {
-				return callback(err);
-			}
+		async.map(keys, module.sortedSetCard, callback);
+	};
 
-			if (!Array.isArray(results)) {
-				results = [];
-			}
+	module.sortedSetsCardSum = function (keys, callback) {
+		if (!keys || (Array.isArray(keys) && !keys.length)) {
+			return callback(null, 0);
+		}
 
-			var map = {};
-			results.forEach(function (item) {
-				if (item && item._id._key) {
-					map[item._id._key] = item.count;
-				}
-			});
-
-			results = keys.map(function (key) {
-				return map[key] || 0;
-			});
-			callback(null, results);
+		db.collection('objects').countDocuments({ _key: Array.isArray(keys) ? { $in: keys } : keys }, function (err, count) {
+			count = parseInt(count, 10);
+			callback(err, count || 0);
 		});
 	};
 
@@ -222,6 +208,14 @@ module.exports = function (db, module) {
 	}
 
 	module.sortedSetsRanks = function (keys, values, callback) {
+		sortedSetsRanks(module.sortedSetRank, keys, values, callback);
+	};
+
+	module.sortedSetsRevRanks = function (keys, values, callback) {
+		sortedSetsRanks(module.sortedSetRevRank, keys, values, callback);
+	};
+
+	function sortedSetsRanks(method, keys, values, callback) {
 		if (!Array.isArray(keys) || !keys.length) {
 			return callback(null, []);
 		}
@@ -231,12 +225,20 @@ module.exports = function (db, module) {
 		}
 
 		async.map(data, function (item, next) {
-			getSortedSetRank(false, item.key, item.value, next);
+			method(item.key, item.value, next);
 		}, callback);
-	};
+	}
 
 	module.sortedSetRanks = function (key, values, callback) {
-		module.getSortedSetRange(key, 0, -1, function (err, sortedSet) {
+		sortedSetRanks(module.getSortedSetRange, key, values, callback);
+	};
+
+	module.sortedSetRevRanks = function (key, values, callback) {
+		sortedSetRanks(module.getSortedSetRevRange, key, values, callback);
+	};
+
+	function sortedSetRanks(method, key, values, callback) {
+		method(key, 0, -1, function (err, sortedSet) {
 			if (err) {
 				return callback(err);
 			}
@@ -251,7 +253,7 @@ module.exports = function (db, module) {
 
 			callback(null, result);
 		});
-	};
+	}
 
 	module.sortedSetScore = function (key, value, callback) {
 		if (!key) {
@@ -502,8 +504,8 @@ module.exports = function (db, module) {
 			.batchSize(options.batch);
 
 		async.whilst(
-			function () {
-				return !done;
+			function (next) {
+				next(null, !done);
 			},
 			function (next) {
 				async.waterfall([

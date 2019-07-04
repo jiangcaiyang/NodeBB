@@ -63,7 +63,7 @@ module.exports = function (middleware) {
 			'brand:logo:url': meta.config['brand:logo:url'] || '',
 			'brand:logo:alt': meta.config['brand:logo:alt'] || '',
 			'brand:logo:display': meta.config['brand:logo'] ? '' : 'hide',
-			allowRegistration: registrationType === 'normal' || registrationType === 'admin-approval' || registrationType === 'admin-approval-ip',
+			allowRegistration: registrationType === 'normal',
 			searchEnabled: plugins.hasListeners('filter:search.query'),
 			config: res.locals.config,
 			relative_path: nconf.get('relative_path'),
@@ -107,7 +107,6 @@ module.exports = function (middleware) {
 						});
 					},
 					navigation: async.apply(navigation.get, req.uid),
-					tags: async.apply(meta.tags.parse, req, data, res.locals.metaTags, res.locals.linkTags),
 					banned: async.apply(user.bans.isBanned, req.uid),
 					banReason: async.apply(user.bans.getReason, req.uid),
 
@@ -180,8 +179,6 @@ module.exports = function (middleware) {
 				templateValues.browserTitle = results.browserTitle;
 				templateValues.navigation = results.navigation;
 				templateValues.unreadCount = unreadCount;
-				templateValues.metaTags = results.tags.meta;
-				templateValues.linkTags = results.tags.link;
 				templateValues.isAdmin = results.user.isAdmin;
 				templateValues.isGlobalMod = results.user.isGlobalMod;
 				templateValues.showModMenu = results.user.isAdmin || results.user.isGlobalMod || results.user.isMod;
@@ -199,6 +196,11 @@ module.exports = function (middleware) {
 
 				templateValues.template = { name: res.locals.template };
 				templateValues.template[res.locals.template] = true;
+
+				if (data.hasOwnProperty('_header')) {
+					templateValues.metaTags = data._header.tags.meta;
+					templateValues.linkTags = data._header.tags.link;
+				}
 
 				if (req.route && req.route.path === '/') {
 					modifyTitle(templateValues);

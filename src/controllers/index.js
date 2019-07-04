@@ -40,6 +40,10 @@ Controllers.errors = require('./errors');
 Controllers.composer = require('./composer');
 
 Controllers.reset = function (req, res, next) {
+	if (meta.config['password:disableEdit']) {
+		return helpers.notAllowed(req, res);
+	}
+
 	res.locals.metaTags = {
 		...res.locals.metaTags,
 		name: 'robots',
@@ -96,7 +100,6 @@ Controllers.login = function (req, res, next) {
 	var data = {};
 	var loginStrategies = require('../routes/authentication').getLoginStrategies();
 	var registrationType = meta.config.registrationType || 'normal';
-
 	var allowLoginWith = (meta.config.allowLoginWith || 'username-email');
 	var returnTo = (req.headers['x-return-to'] || '').replace(nconf.get('base_url') + nconf.get('relative_path'), '');
 
@@ -113,13 +116,14 @@ Controllers.login = function (req, res, next) {
 
 	data.alternate_logins = loginStrategies.length > 0;
 	data.authentication = loginStrategies;
-	data.allowRegistration = registrationType === 'normal' || registrationType === 'admin-approval' || registrationType === 'admin-approval-ip';
+	data.allowRegistration = registrationType === 'normal';
 	data.allowLoginWith = '[[login:' + allowLoginWith + ']]';
 	data.breadcrumbs = helpers.buildBreadcrumbs([{
 		text: '[[global:login]]',
 	}]);
 	data.error = req.flash('error')[0] || errorText;
 	data.title = '[[pages:login]]';
+	data.allowPasswordReset = !meta.config['password:disableEdit'];
 
 	privileges.global.canGroup('local:login', 'registered-users', function (err, hasLoginPrivilege) {
 		if (err) {
@@ -154,7 +158,7 @@ Controllers.register = function (req, res, next) {
 	var registrationType = meta.config.registrationType || 'normal';
 
 	if (registrationType === 'disabled') {
-		return next();
+		return setImmediate(next);
 	}
 
 	var errorText;

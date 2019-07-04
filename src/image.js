@@ -9,6 +9,7 @@ var winston = require('winston');
 
 var file = require('./file');
 var plugins = require('./plugins');
+var meta = require('./meta');
 
 var image = module.exports;
 
@@ -92,6 +93,9 @@ image.size = function (path, callback) {
 };
 
 image.stripEXIF = function (path, callback) {
+	if (!meta.config.stripEXIFData || path.endsWith('.gif')) {
+		return setImmediate(callback);
+	}
 	async.waterfall([
 		function (next) {
 			fs.readFile(path, next);

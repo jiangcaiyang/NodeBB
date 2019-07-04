@@ -27,19 +27,12 @@ module.exports = function (Topics) {
 	Topics.getTopicPosts = function (tid, set, start, stop, uid, reverse, callback) {
 		async.waterfall([
 			function (next) {
-				async.parallel({
-					posts: function (next) {
-						posts.getPostsFromSet(set, start, stop, uid, reverse, next);
-					},
-					postCount: function (next) {
-						Topics.getTopicField(tid, 'postcount', next);
-					},
-				}, next);
+				posts.getPostsFromSet(set, start, stop, uid, reverse, next);
 			},
-			function (results, next) {
-				Topics.calculatePostIndices(results.posts, start, results.postCount, reverse);
+			function (posts, next) {
+				Topics.calculatePostIndices(posts, start);
 
-				Topics.addPostData(results.posts, uid, next);
+				Topics.addPostData(posts, uid, next);
 			},
 		], callback);
 	};
@@ -138,7 +131,10 @@ module.exports = function (Topics) {
 				post.display_delete_tools = topicPrivileges.isAdminOrMod || (post.selfPost && topicPrivileges['posts:delete']);
 				post.display_moderator_tools = post.display_edit_tools || post.display_delete_tools;
 				post.display_move_tools = topicPrivileges.isAdminOrMod && post.index !== 0;
-				post.display_post_menu = topicPrivileges.isAdminOrMod || (post.selfPost && !topicData.locked) || ((loggedIn || topicData.postSharing.length) && !post.deleted);
+				post.display_post_menu = topicPrivileges.isAdminOrMod ||
+					(post.selfPost && !topicData.locked && !post.deleted) ||
+					(post.selfPost && post.deleted && parseInt(post.deleterUid, 10) === parseInt(topicPrivileges.uid, 10)) ||
+					((loggedIn || topicData.postSharing.length) && !post.deleted);
 				post.ip = topicPrivileges.isAdminOrMod ? post.ip : undefined;
 
 				posts.modifyPostByPrivilege(post, topicPrivileges);
@@ -182,11 +178,9 @@ module.exports = function (Topics) {
 		], callback);
 	};
 
-	Topics.calculatePostIndices = function (posts, start, postCount, reverse) {
+	Topics.calculatePostIndices = function (posts, start) {
 		posts.forEach(function (post, index) {
-			if (reverse) {
-				post.index = postCount - (start + index + 1);
-			} else {
+			if (post) {
 				post.index = start + index + 1;
 			}
 		});
@@ -243,8 +237,8 @@ module.exports = function (Topics) {
 					},
 				], next);
 			},
-			function () {
-				return isDeleted && !done;
+			function (next) {
+				next(null, isDeleted && !done);
 			},
 			function (err) {
 				callback(err, parseInt(latestPid, 10));
@@ -261,19 +255,12 @@ module.exports = function (Topics) {
 				if (!parseInt(mainPid, 10)) {
 					Topics.setTopicField(tid, 'mainPid', postData.pid, next);
 				} else {
-					async.parallel([
-						function (next) {
-							db.sortedSetAdd('tid:' + tid + ':posts', postData.timestamp, postData.pid, next);
-						},
-						function (next) {
-							var upvotes = parseInt(postData.upvotes, 10) || 0;
-							var downvotes = parseInt(postData.downvotes, 10) || 0;
-							var votes = upvotes - downvotes;
-							db.sortedSetAdd('tid:' + tid + ':posts:votes', votes, postData.pid, next);
-						},
-					], function (err) {
-						next(err);
-					});
+					const upvotes = parseInt(postData.upvotes, 10) || 0;
+					const downvotes = parseInt(postData.downvotes, 10) || 0;
+					const votes = upvotes - downvotes;
+					db.sortedSetsAdd([
+						'tid:' + tid + ':posts', 'tid:' + tid + ':posts:votes',
+					], [postData.timestamp, votes], postData.pid, next);
 				}
 			},
 			function (next) {

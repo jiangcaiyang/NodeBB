@@ -14,9 +14,9 @@ var loginStrategies = [];
 var Auth = module.exports;
 
 Auth.initialize = function (app, middleware) {
-	const passwortInitMiddleware = passport.initialize();
+	const passportInitMiddleware = passport.initialize();
 	app.use(function passportInitialize(req, res, next) {
-		passwortInitMiddleware(req, res, next);
+		passportInitMiddleware(req, res, next);
 	});
 	const passportSessionMiddleware = passport.session();
 	app.use(function passportSession(req, res, next) {
@@ -58,7 +58,12 @@ Auth.reloadRoutes = function (router, callback) {
 
 	async.waterfall([
 		function (next) {
-			plugins.fireHook('filter:auth.init', loginStrategies, next);
+			plugins.fireHook('filter:auth.init', loginStrategies, function (err) {
+				if (err) {
+					winston.error('[authentication] ' + err.stack);
+				}
+				next(null, loginStrategies);
+			});
 		},
 		function (loginStrategies, next) {
 			loginStrategies = loginStrategies || [];

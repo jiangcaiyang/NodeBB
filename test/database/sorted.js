@@ -93,10 +93,56 @@ describe('Sorted Set methods', function () {
 			});
 		});
 
+		it('should add an element to two sorted sets with different scores', function (done) {
+			db.sortedSetsAdd(['sorted1', 'sorted2'], [4, 5], 'value4', function (err) {
+				assert.ifError(err);
+				db.sortedSetsScore(['sorted1', 'sorted2'], 'value4', function (err, scores) {
+					assert.ifError(err);
+					assert.deepStrictEqual(scores, [4, 5]);
+					done();
+				});
+			});
+		});
+
+
+		it('should error if keys.length is different than scores.length', function (done) {
+			db.sortedSetsAdd(['sorted1', 'sorted2'], [4], 'value4', function (err) {
+				assert.equal(err.message, '[[error:invalid-data]]');
+				done();
+			});
+		});
 
 		it('should error if score is null', function (done) {
 			db.sortedSetsAdd(['sorted1', 'sorted2'], null, 'value1', function (err) {
 				assert.equal(err.message, '[[error:invalid-score, null]]');
+				done();
+			});
+		});
+	});
+
+	describe('sortedSetAddMulti()', function () {
+		it('should add elements into multiple sorted sets with different scores', function (done) {
+			db.sortedSetAddBulk([
+				['bulk1', 1, 'item1'],
+				['bulk2', 2, 'item1'],
+				['bulk2', 3, 'item2'],
+				['bulk3', 4, 'item3'],
+			], function (err) {
+				assert.ifError(err);
+				assert.equal(arguments.length, 1);
+				db.getSortedSetRevRangeWithScores(['bulk1', 'bulk2', 'bulk3'], 0, -1, function (err, data) {
+					assert.ifError(err);
+					assert.deepStrictEqual(data, [{ value: 'item3', score: 4 },
+						{ value: 'item2', score: 3 },
+						{ value: 'item1', score: 2 },
+						{ value: 'item1', score: 1 }]);
+					done();
+				});
+			});
+		});
+		it('should not error if data is undefined', function (done) {
+			db.sortedSetAddBulk(undefined, function (err) {
+				assert.ifError(err);
 				done();
 			});
 		});
@@ -374,7 +420,7 @@ describe('Sorted Set methods', function () {
 	describe('sortedSetsCard()', function () {
 		it('should return the number of elements in sorted sets', function (done) {
 			db.sortedSetsCard(['sortedSetTest1', 'sortedSetTest2', 'doesnotexist'], function (err, counts) {
-				assert.equal(err, null);
+				assert.ifError(err);
 				assert.equal(arguments.length, 2);
 				assert.deepEqual(counts, [3, 2, 0]);
 				done();
@@ -395,6 +441,44 @@ describe('Sorted Set methods', function () {
 				assert.ifError(err);
 				assert.equal(arguments.length, 2);
 				assert.deepEqual(counts, []);
+				done();
+			});
+		});
+	});
+
+	describe('sortedSetsCardSum()', function () {
+		it('should return the total number of elements in sorted sets', function (done) {
+			db.sortedSetsCardSum(['sortedSetTest1', 'sortedSetTest2', 'doesnotexist'], function (err, sum) {
+				assert.ifError(err);
+				assert.equal(arguments.length, 2);
+				assert.equal(sum, 5);
+				done();
+			});
+		});
+
+		it('should return 0 if keys is falsy', function (done) {
+			db.sortedSetsCardSum(undefined, function (err, counts) {
+				assert.ifError(err);
+				assert.equal(arguments.length, 2);
+				assert.deepEqual(counts, 0);
+				done();
+			});
+		});
+
+		it('should return 0 if keys is empty array', function (done) {
+			db.sortedSetsCardSum([], function (err, counts) {
+				assert.ifError(err);
+				assert.equal(arguments.length, 2);
+				assert.deepEqual(counts, 0);
+				done();
+			});
+		});
+
+		it('should return the total number of elements in sorted set', function (done) {
+			db.sortedSetsCardSum('sortedSetTest1', function (err, sum) {
+				assert.ifError(err);
+				assert.equal(arguments.length, 2);
+				assert.equal(sum, 3);
 				done();
 			});
 		});
@@ -502,6 +586,15 @@ describe('Sorted Set methods', function () {
 				assert.equal(err, null);
 				assert.equal(arguments.length, 2);
 				assert.deepEqual(ranks, [1, 0, 2, null]);
+				done();
+			});
+		});
+
+		it('should return the ranks of values in a sorted set in reverse', function (done) {
+			db.sortedSetRevRanks('sortedSetTest1', ['value2', 'value1', 'value3', 'value4'], function (err, ranks) {
+				assert.equal(err, null);
+				assert.equal(arguments.length, 2);
+				assert.deepEqual(ranks, [1, 2, 0, null]);
 				done();
 			});
 		});

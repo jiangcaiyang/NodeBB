@@ -29,6 +29,11 @@ questions.main = [
 		default: nconf.get('secret') || utils.generateUUID(),
 	},
 	{
+		name: 'submitPluginUsage',
+		description: 'Would you like to submit anonymous plugin usage to nbbpm?',
+		default: 'yes',
+	},
+	{
 		name: 'database',
 		description: 'Which database to use',
 		default: nconf.get('database') || 'mongo',
@@ -197,6 +202,14 @@ function completeConfigSetup(config, next) {
 
 			// ref: https://github.com/indexzero/nconf/issues/300
 			delete config.type;
+
+			var meta = require('./meta');
+			meta.configs.set('submitPluginUsage', config.submitPluginUsage === 'yes' ? 1 : 0, function (err) {
+				next(err, config);
+			});
+		},
+		function (config, next) {
+			delete config.submitPluginUsage;
 
 			install.save(config, next);
 		},
@@ -398,6 +411,9 @@ function giveGlobalPrivileges(next) {
 			privileges.global.give(defaultPrivileges, 'registered-users', next);
 		},
 		function (next) {
+			privileges.global.give(defaultPrivileges.concat(['ban', 'upload:post:file']), 'Global Moderators', next);
+		},
+		function (next) {
 			privileges.global.give(['view:users', 'view:tags', 'view:groups'], 'guests', next);
 		},
 		function (next) {
@@ -511,9 +527,7 @@ function enableDefaultPlugins(next) {
 	winston.info('[install/enableDefaultPlugins] activating default plugins', defaultEnabled);
 
 	var db = require('./database');
-	var order = defaultEnabled.map(function (plugin, index) {
-		return index;
-	});
+	var order = defaultEnabled.map((plugin, index) => index);
 	db.sortedSetAdd('plugins:active', order, defaultEnabled, next);
 }
 

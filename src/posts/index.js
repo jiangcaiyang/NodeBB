@@ -88,8 +88,9 @@ Posts.getPostSummariesFromSet = function (set, uid, start, stop, callback) {
 Posts.getPidIndex = function (pid, tid, topicPostSort, callback) {
 	async.waterfall([
 		function (next) {
-			var set = topicPostSort === 'most_votes' ? 'tid:' + tid + ':posts:votes' : 'tid:' + tid + ':posts';
-			db.sortedSetRank(set, pid, next);
+			const set = topicPostSort === 'most_votes' ? 'tid:' + tid + ':posts:votes' : 'tid:' + tid + ':posts';
+			const reverse = topicPostSort === 'newest_to_oldest' || topicPostSort === 'most_votes';
+			db[reverse ? 'sortedSetRevRank' : 'sortedSetRank'](set, pid, next);
 		},
 		function (index, next) {
 			if (!utils.isNumber(index)) {
@@ -111,21 +112,17 @@ Posts.getPostIndices = function (posts, uid, callback) {
 		},
 		function (settings, next) {
 			var byVotes = settings.topicPostSort === 'most_votes';
-			var sets = posts.map(function (post) {
-				return byVotes ? 'tid:' + post.tid + ':posts:votes' : 'tid:' + post.tid + ':posts';
-			});
+			var sets = posts.map(p => (byVotes ? 'tid:' + p.tid + ':posts:votes' : 'tid:' + p.tid + ':posts'));
+			const reverse = settings.topicPostSort === 'newest_to_oldest' || settings.topicPostSort === 'most_votes';
 
 			var uniqueSets = _.uniq(sets);
-			var method = 'sortedSetsRanks';
+			var method = reverse ? 'sortedSetsRevRanks' : 'sortedSetsRanks';
 			if (uniqueSets.length === 1) {
-				method = 'sortedSetRanks';
+				method = reverse ? 'sortedSetRevRanks' : 'sortedSetRanks';
 				sets = uniqueSets[0];
 			}
 
-			var pids = posts.map(function (post) {
-				return post.pid;
-			});
-
+			const pids = posts.map(post => post.pid);
 			db[method](sets, pids, next);
 		},
 		function (indices, next) {
@@ -144,46 +141,47 @@ Posts.updatePostVoteCount = function (postData, callback) {
 	}
 	async.parallel([
 		function (next) {
-			if (postData.uid) {
-				if (postData.votes > 0) {
-					db.sortedSetAdd('uid:' + postData.uid + ':posts:votes', postData.votes, postData.pid, next);
-				} else {
-					db.sortedSetRemove('uid:' + postData.uid + ':posts:votes', postData.pid, next);
-				}
-			} else {
-				next();
-			}
-		},
-		function (next) {
+			let cid;
 			async.waterfall([
 				function (next) {
 					topics.getTopicFields(postData.tid, ['mainPid', 'cid', 'pinned'], next);
 				},
 				function (topicData, next) {
-					if (parseInt(topicData.mainPid, 10) === parseInt(postData.pid, 10)) {
-						async.parallel([
-							function (next) {
-								topics.setTopicFields(postData.tid, {
-									upvotes: postData.upvotes,
-									downvotes: postData.downvotes,
-								}, next);
-							},
-							function (next) {
-								db.sortedSetAdd('topics:votes', postData.votes, postData.tid, next);
-							},
-							function (next) {
-								if (!topicData.pinned) {
-									db.sortedSetAdd('cid:' + topicData.cid + ':tids:votes', postData.votes, postData.tid, next);
-								} else {
-									next();
-								}
-							},
-						], function (err) {
-							next(err);
-						});
-						return;
+					cid = topicData.cid;
+					if (parseInt(topicData.mainPid, 10) !== parseInt(postData.pid, 10)) {
+						return db.sortedSetAdd('tid:' + postData.tid + ':posts:votes', postData.votes, postData.pid, next);
 					}
-					db.sortedSetAdd('tid:' + postData.tid + ':posts:votes', postData.votes, postData.pid, next);
+					async.parallel([
+						function (next) {
+							topics.setTopicFields(postData.tid, {
+								upvotes: postData.upvotes,
+								downvotes: postData.downvotes,
+							}, next);
+						},
+						function (next) {
+							db.sortedSetAdd('topics:votes', postData.votes, postData.tid, next);
+						},
+						function (next) {
+							if (!topicData.pinned) {
+								db.sortedSetAdd('cid:' + topicData.cid + ':tids:votes', postData.votes, postData.tid, next);
+							} else {
+								next();
+							}
+						},
+					], function (err) {
+						next(err);
+					});
+				},
+				function (next) {
+					if (postData.uid) {
+						if (postData.votes > 0) {
+							db.sortedSetAdd('cid:' + cid + ':uid:' + postData.uid + ':pids:votes', postData.votes, postData.pid, next);
+						} else {
+							db.sortedSetRemove('cid:' + cid + ':uid:' + postData.uid + ':pids:votes', postData.pid, next);
+						}
+					} else {
+						next();
+					}
 				},
 			], next);
 		},

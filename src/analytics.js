@@ -187,9 +187,9 @@ Analytics.getDailyStatsForSet = function (set, day, numDays, callback) {
 	day.setDate(day.getDate() + 1);	// set the date to tomorrow, because getHourlyStatsForSet steps *backwards* 24 hours to sum up the values
 	day.setHours(0, 0, 0, 0);
 
-	async.whilst(function () {
+	async.whilst(function (next) {
 		numDays -= 1;
-		return numDays + 1;
+		next(null, numDays + 1);
 	}, function (next) {
 		Analytics.getHourlyStatsForSet(set, day.getTime() - (1000 * 60 * 60 * 24 * numDays), 24, function (err, day) {
 			if (err) {
@@ -259,3 +259,5 @@ Analytics.getBlacklistAnalytics = function (callback) {
 		hourly: async.apply(Analytics.getHourlyStatsForSet, 'analytics:blacklist', Date.now(), 24),
 	}, callback);
 };
+
+Analytics.async = require('./promisify')(Analytics);

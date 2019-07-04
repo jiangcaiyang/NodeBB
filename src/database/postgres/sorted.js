@@ -259,6 +259,22 @@ SELECT o."_key" k,
 		});
 	};
 
+	module.sortedSetsCardSum = function (keys, callback) {
+		if (!keys || (Array.isArray(keys) && !keys.length)) {
+			return callback(null, 0);
+		}
+		if (!Array.isArray(keys)) {
+			keys = [keys];
+		}
+		module.sortedSetsCard(keys, function (err, counts) {
+			if (err) {
+				return callback(err);
+			}
+			const sum = counts.reduce(function (acc, val) { return acc + val; }, 0);
+			callback(null, sum);
+		});
+	};
+
 	module.sortedSetRank = function (key, value, callback) {
 		getSortedSetRank('ASC', [key], [value], function (err, result) {
 			callback(err, result ? result[0] : null);
@@ -307,12 +323,28 @@ SELECT (SELECT r
 		getSortedSetRank('ASC', keys, values, callback);
 	};
 
+	module.sortedSetsRevRanks = function (keys, values, callback) {
+		if (!Array.isArray(keys) || !keys.length) {
+			return callback(null, []);
+		}
+
+		getSortedSetRank('DESC', keys, values, callback);
+	};
+
 	module.sortedSetRanks = function (key, values, callback) {
 		if (!Array.isArray(values) || !values.length) {
 			return callback(null, []);
 		}
 
 		getSortedSetRank('ASC', new Array(values.length).fill(key), values, callback);
+	};
+
+	module.sortedSetRevRanks = function (key, values, callback) {
+		if (!Array.isArray(values) || !values.length) {
+			return callback(null, []);
+		}
+
+		getSortedSetRank('DESC', new Array(values.length).fill(key), values, callback);
 	};
 
 	module.sortedSetScore = function (key, value, callback) {
@@ -707,14 +739,19 @@ SELECT z."value", z."score"
  WHERE o."_key" = $1::TEXT
  ORDER BY z."score" ASC, z."value" ASC`, [setKey]));
 
-			async.doUntil(function (next) {
+			var isDone = false;
+
+			async.whilst(function (next) {
+				next(null, !isDone);
+			}, function (next) {
 				query.read(batchSize, function (err, rows) {
 					if (err) {
 						return next(err);
 					}
 
 					if (!rows.length) {
-						return next(null, true);
+						isDone = true;
+						return next();
 					}
 
 					rows = rows.map(function (row) {
@@ -735,8 +772,6 @@ SELECT z."value", z."score"
 						}
 					});
 				});
-			}, function (stop) {
-				return stop;
 			}, function (err) {
 				done();
 				callback(err);
