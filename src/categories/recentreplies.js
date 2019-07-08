@@ -21,7 +21,7 @@ module.exports = function (Categories) {
 				db.getSortedSetRevRange('cid:' + cid + ':pids', 0, count - 1, next);
 			},
 			function (pids, next) {
-				privileges.posts.filter('read', pids, uid, next);
+				privileges.posts.filter('topics:read', pids, uid, next);
 			},
 			function (pids, next) {
 				posts.getPostSummaryByPids(pids, uid, { stripTags: true }, next);
@@ -92,7 +92,7 @@ module.exports = function (Categories) {
 			function (results, next) {
 				var tids = _.uniq(_.flatten(results).filter(Boolean));
 
-				privileges.topics.filterTids('read', tids, uid, next);
+				privileges.topics.filterTids('topics:read', tids, uid, next);
 			},
 			function (tids, next) {
 				getTopics(tids, uid, next);
@@ -138,7 +138,6 @@ module.exports = function (Categories) {
 						teaser.parentCid = parseInt(parentCids[teaser.cid], 10) || 0;
 						teaser.tid = undefined;
 						teaser.uid = undefined;
-						teaser.user.uid = undefined;
 						teaser.topic = {
 							slug: topicData[index].slug,
 							title: topicData[index].title,
@@ -204,12 +203,10 @@ module.exports = function (Categories) {
 				batch.processArray(pids, function (pids, next) {
 					async.waterfall([
 						function (next) {
-							posts.getPostsFields(pids, ['timestamp'], next);
+							posts.getPostsFields(pids, ['pid', 'uid', 'timestamp', 'upvotes', 'downvotes'], next);
 						},
 						function (postData, next) {
-							var timestamps = postData.map(function (post) {
-								return post && post.timestamp;
-							});
+							var timestamps = postData.map(p => p && p.timestamp);
 
 							async.parallel([
 								function (next) {
@@ -217,6 +214,25 @@ module.exports = function (Categories) {
 								},
 								function (next) {
 									db.sortedSetAdd('cid:' + cid + ':pids', timestamps, pids, next);
+								},
+								function (next) {
+									async.each(postData, function (post, next) {
+										db.sortedSetRemove([
+											'cid:' + oldCid + ':uid:' + post.uid + ':pids',
+											'cid:' + oldCid + ':uid:' + post.uid + ':pids:votes',
+										], post.pid, next);
+									}, next);
+								},
+								function (next) {
+									async.each(postData, function (post, next) {
+										const keys = ['cid:' + cid + ':uid:' + post.uid + ':pids'];
+										const scores = [post.timestamp];
+										if (post.votes > 0) {
+											keys.push('cid:' + cid + ':uid:' + post.uid + ':pids:votes');
+											scores.push(post.votes);
+										}
+										db.sortedSetsAdd(keys, scores, post.pid, next);
+									}, next);
 								},
 							], next);
 						},

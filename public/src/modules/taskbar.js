@@ -34,6 +34,42 @@ define('taskbar', ['benchpress', 'translator'], function (Benchpress, translator
 				return false;
 			});
 		});
+
+		$(window).on('action:app.loggedOut', function () {
+			taskbar.closeAll();
+		});
+	};
+
+	taskbar.close = function (module, uuid) {
+		// Sends signal to the appropriate module's .close() fn (if present)
+		var btnEl = taskbar.tasklist.find('[data-module="' + module + '"][data-uuid="' + uuid + '"]');
+		var fnName = 'close';
+
+		// TODO: Refactor chat module to not take uuid in close instead of by jQuery element
+		if (module === 'chat') {
+			fnName = 'closeByUUID';
+		}
+
+		if (btnEl.length) {
+			require([module], function (module) {
+				if (typeof module[fnName] === 'function') {
+					module[fnName](uuid);
+				}
+			});
+		}
+	};
+
+	taskbar.closeAll = function (module) {
+		// module is optional
+		var selector = '[data-uuid]';
+
+		if (module) {
+			selector = '[data-module="' + module + '"]' + selector;
+		}
+
+		taskbar.tasklist.find(selector).each(function (idx, el) {
+			taskbar.close(module || el.getAttribute('data-module'), el.getAttribute('data-uuid'));
+		});
 	};
 
 	taskbar.discard = function (module, uuid) {
@@ -43,7 +79,8 @@ define('taskbar', ['benchpress', 'translator'], function (Benchpress, translator
 		update();
 	};
 
-	taskbar.push = function (module, uuid, options) {
+	taskbar.push = function (module, uuid, options, callback) {
+		callback = callback || function () {};
 		var element = taskbar.tasklist.find('li[data-uuid="' + uuid + '"]');
 
 		var data = {
@@ -56,7 +93,9 @@ define('taskbar', ['benchpress', 'translator'], function (Benchpress, translator
 		$(window).trigger('filter:taskbar.push', data);
 
 		if (!element.length && data.module) {
-			createTaskbar(data);
+			createTaskbarItem(data, callback);
+		} else {
+			callback(element);
 		}
 	};
 
@@ -110,7 +149,7 @@ define('taskbar', ['benchpress', 'translator'], function (Benchpress, translator
 		taskbar.tasklist.find('.active').removeClass('active');
 	}
 
-	function createTaskbar(data) {
+	function createTaskbarItem(data, callback) {
 		translator.translate(data.options.title, function (taskTitle) {
 			var title = $('<div></div>').text(taskTitle || 'NodeBB Task').html();
 
@@ -139,6 +178,7 @@ define('taskbar', ['benchpress', 'translator'], function (Benchpress, translator
 
 			taskbarEl.data(data);
 			$(window).trigger('action:taskbar.pushed', data);
+			callback(taskbarEl);
 		});
 	}
 

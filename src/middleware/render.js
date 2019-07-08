@@ -6,15 +6,16 @@ var validator = require('validator');
 var winston = require('winston');
 
 var plugins = require('../plugins');
+var meta = require('../meta');
 var translator = require('../translator');
 var widgets = require('../widgets');
 var utils = require('../utils');
 
 module.exports = function (middleware) {
-	middleware.processRender = function (req, res, next) {
+	middleware.processRender = function processRender(req, res, next) {
 		// res.render post-processing, modified from here: https://gist.github.com/mrlannigan/5051687
 		var render = res.render;
-		res.render = function (template, options, fn) {
+		res.render = function renderOverride(template, options, fn) {
 			var self = this;
 			var req = this.req;
 			var defaultFn = function (err, str) {
@@ -37,7 +38,7 @@ module.exports = function (middleware) {
 			var templateToRender;
 			async.waterfall([
 				function (next) {
-					options.loggedIn = !!req.uid;
+					options.loggedIn = req.uid > 0;
 					options.relative_path = nconf.get('relative_path');
 					options.template = { name: template };
 					options.template[template] = true;
@@ -48,6 +49,14 @@ module.exports = function (middleware) {
 				function (data, next) {
 					templateToRender = data.templateData.templateToRender || template;
 					plugins.fireHook('filter:middleware.render', { req: req, res: res, templateData: data.templateData }, next);
+				},
+				function parseTags(data, next) {
+					meta.tags.parse(req, data, res.locals.metaTags, res.locals.linkTags, function (err, tags) {
+						options._header = {
+							tags: tags,
+						};
+						next(err, data);
+					});
 				},
 				function (data, next) {
 					options = data.templateData;

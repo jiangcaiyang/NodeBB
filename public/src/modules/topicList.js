@@ -62,7 +62,7 @@ define('topicList', [
 
 	function findTopicListElement() {
 		return $('[component="category"]').filter(function (i, e) {
-			return !$(e).parents('[widget-area]').length;
+			return !$(e).parents('[widget-area],[data-widget-area]').length;
 		});
 	}
 
@@ -236,7 +236,7 @@ define('topicList', [
 			count: config.topicsPerPage,
 			cid: query.cid,
 			query: query,
-			term: ajaxify.data.selectedTerm.term,
+			term: ajaxify.data.selectedTerm && ajaxify.data.selectedTerm.term,
 			filter: ajaxify.data.selectedFilter.filter,
 			set: topicListEl.attr('data-set') ? topicListEl.attr('data-set') : 'topics:recent',
 		}, callback);

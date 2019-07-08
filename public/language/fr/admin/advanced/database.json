@@ -18,10 +18,11 @@
 	"mongo.resident-memory": "Mémoire résidente",
 	"mongo.virtual-memory": "Mémoire virtuelle",
 	"mongo.mapped-memory": "Configuration de mémoire",
-	"mongo.bytes-in": "Octets entrés",
-	"mongo.bytes-out": "Octets sortants",
+	"mongo.bytes-in": "Données entrées",
+	"mongo.bytes-out": "Données sorties",
 	"mongo.num-requests": "Nombre de requêtes",
 	"mongo.raw-info": "Informations brutes MongoDB",
+	"mongo.unauthorized": "NodeBB n'a pas pu interroger la base de données MongoDB pour obtenir des statistiques pertinentes. Assurez-vous que l'utilisateur utilisé par NodeBB contient le message &quot;clusterMonitor&quot; pour le rôle &quot;admin&quot; des bases de données.",
 
 	"redis": "Redis",
 	"redis.version": "Version de Redis",

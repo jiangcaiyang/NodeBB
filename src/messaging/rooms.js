@@ -124,10 +124,8 @@ module.exports = function (Messaging) {
 				if (!inRoom) {
 					return next(new Error('[[error:cant-add-users-to-chat-room]]'));
 				}
-				var now = Date.now();
-				var timestamps = uids.map(function () {
-					return now;
-				});
+				const now = Date.now();
+				const timestamps = uids.map(() => now);
 				db.sortedSetAdd('chat:room:' + roomId + ':uids', timestamps, uids, next);
 			},
 			function (next) {
@@ -250,6 +248,13 @@ module.exports = function (Messaging) {
 		}
 		async.waterfall([
 			function (next) {
+				plugins.fireHook('filter:chat.renameRoom', {
+					uid: uid,
+					roomId: roomId,
+					newName: newName,
+				}, next);
+			},
+			function (result, next) {
 				Messaging.isRoomOwner(uid, roomId, next);
 			},
 			function (isOwner, next) {

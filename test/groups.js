@@ -985,31 +985,21 @@ describe('Groups', function () {
 		});
 
 		it('should fail to create group if group creation is disabled', function (done) {
-			var oldValue = meta.config.allowGroupCreation;
-			meta.config.allowGroupCreation = 0;
-			socketGroups.create({ uid: 1 }, {}, function (err) {
-				assert.equal(err.message, '[[error:group-creation-disabled]]');
-				meta.config.allowGroupCreation = oldValue;
+			socketGroups.create({ uid: testUid }, {}, function (err) {
+				assert.equal(err.message, '[[error:no-privileges]]');
 				done();
 			});
 		});
 
 		it('should fail to create group if name is privilege group', function (done) {
-			var oldValue = meta.config.allowGroupCreation;
-			meta.config.allowGroupCreation = 1;
 			socketGroups.create({ uid: 1 }, { name: 'cid:1:privileges:groups:find' }, function (err) {
 				assert.equal(err.message, '[[error:invalid-group-name]]');
-				meta.config.allowGroupCreation = oldValue;
 				done();
 			});
 		});
 
-
 		it('should create/update group', function (done) {
-			var oldValue = meta.config.allowGroupCreation;
-			meta.config.allowGroupCreation = 1;
 			socketGroups.create({ uid: adminUid }, { name: 'createupdategroup' }, function (err, groupData) {
-				meta.config.allowGroupCreation = oldValue;
 				assert.ifError(err);
 				assert(groupData);
 				var data = {
@@ -1041,10 +1031,7 @@ describe('Groups', function () {
 		});
 
 		it('should fail to create a group with name guests', function (done) {
-			var oldValue = meta.config.allowGroupCreation;
-			meta.config.allowGroupCreation = 1;
 			socketGroups.create({ uid: adminUid }, { name: 'guests' }, function (err) {
-				meta.config.allowGroupCreation = oldValue;
 				assert.equal(err.message, '[[error:invalid-group-name]]');
 				done();
 			});
@@ -1297,7 +1284,11 @@ describe('Groups', function () {
 				assert.ifError(err);
 				Groups.getGroupFields('Test', ['cover:url'], function (err, groupData) {
 					assert.ifError(err);
-					assert.equal(data.url, groupData['cover:url']);
+					assert.equal(nconf.get('relative_path') + data.url, groupData['cover:url']);
+					if (nconf.get('relative_path')) {
+						assert(!data.url.startsWith(nconf.get('relative_path')));
+						assert(groupData['cover:url'].startsWith(nconf.get('relative_path')), groupData['cover:url']);
+					}
 					done();
 				});
 			});
@@ -1313,7 +1304,7 @@ describe('Groups', function () {
 				assert.ifError(err);
 				Groups.getGroupFields('Test', ['cover:url'], function (err, groupData) {
 					assert.ifError(err);
-					assert.equal(data.url, groupData['cover:url']);
+					assert.equal(nconf.get('relative_path') + data.url, groupData['cover:url']);
 					done();
 				});
 			});
@@ -1361,7 +1352,7 @@ describe('Groups', function () {
 					assert.equal(res.statusCode, 200);
 					Groups.getGroupFields('Test', ['cover:url'], function (err, groupData) {
 						assert.ifError(err);
-						assert.equal(body[0].url, groupData['cover:url']);
+						assert.equal(nconf.get('relative_path') + body[0].url, groupData['cover:url']);
 						done();
 					});
 				});

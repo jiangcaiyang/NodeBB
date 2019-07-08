@@ -1,8 +1,6 @@
 'use strict';
 
 var async = require('async');
-var request = require('request');
-var winston = require('winston');
 var validator = require('validator');
 
 var db = require('../database');
@@ -111,6 +109,9 @@ module.exports = function (User) {
 				markNotificationRead(username, next);
 			},
 			function (next) {
+				plugins.fireHook('filter:register.complete', { uid: uid }, next);
+			},
+			function (result, next) {
 				var title = meta.config.title || meta.config.browserTitle || 'NodeBB';
 				var data = {
 					username: username,
@@ -162,15 +163,15 @@ module.exports = function (User) {
 	}
 
 	User.shouldQueueUser = function (ip, callback) {
-		var registrationType = meta.config.registrationType || 'normal';
-		if (registrationType === 'normal' || registrationType === 'invite-only' || registrationType === 'admin-invite-only') {
-			setImmediate(callback, null, false);
-		} else if (registrationType === 'admin-approval') {
+		const registrationApprovalType = meta.config.registrationApprovalType;
+		if (registrationApprovalType === 'admin-approval') {
 			setImmediate(callback, null, true);
-		} else if (registrationType === 'admin-approval-ip') {
+		} else if (registrationApprovalType === 'admin-approval-ip') {
 			db.sortedSetCard('ip:' + ip + ':uid', function (err, count) {
 				callback(err, !!count);
 			});
+		} else {
+			setImmediate(callback, null, false);
 		}
 	};
 
@@ -182,9 +183,7 @@ module.exports = function (User) {
 			},
 			function (_data, next) {
 				data = _data;
-				var keys = data.filter(Boolean).map(function (user) {
-					return 'registration:queue:name:' + user.value;
-				});
+				var keys = data.filter(Boolean).map(user => 'registration:queue:name:' + user.value);
 				db.getObjects(keys, next);
 			},
 			function (users, next) {
@@ -197,18 +196,21 @@ module.exports = function (User) {
 
 				async.map(users, function (user, next) {
 					// temporary: see http://www.stopforumspam.com/forum/viewtopic.php?id=6392
+					// need to keep this for getIPMatchedUsers
 					user.ip = user.ip.replace('::ffff:', '');
-
-					async.parallel([
-						function (next) {
-							getIPMatchedUsers(user, next);
-						},
-						function (next) {
-							getSpamData(user, next);
-						},
-					], function (err) {
+					getIPMatchedUsers(user, function (err) {
 						next(err, user);
 					});
+					user.customActions = [].concat(user.customActions);
+					/*
+						// then spam prevention plugins, using the "filter:user.getRegistrationQueue" hook can be like:
+						user.customActions.push({
+							title: '[[spam-be-gone:report-user]]',
+							id: 'report-spam-user-' + user.username,
+							class: 'btn-warning report-spam-user',
+							icon: 'fa-flag'
+						});
+					 */
 				}, next);
 			},
 			function (users, next) {
@@ -233,35 +235,5 @@ module.exports = function (User) {
 				next();
 			},
 		], callback);
-	}
-
-	function getSpamData(user, callback) {
-		async.waterfall([
-			function (next) {
-				request({
-					method: 'get',
-					url: 'http://api.stopforumspam.org/api' +
-						'?ip=' + encodeURIComponent(user.ip) +
-						'&email=' + encodeURIComponent(user.email) +
-						'&username=' + encodeURIComponent(user.username) +
-						'&f=json',
-					json: true,
-				}, next);
-			},
-			function (response, body, next) {
-				if (response.statusCode === 200 && body) {
-					user.spamData = body;
-					user.usernameSpam = body.username ? (body.username.frequency > 0 || body.username.appears > 0) : true;
-					user.emailSpam = body.email ? (body.email.frequency > 0 || body.email.appears > 0) : true;
-					user.ipSpam = body.ip ? (body.ip.frequency > 0 || body.ip.appears > 0) : true;
-				}
-				next();
-			},
-		], function (err) {
-			if (err) {
-				winston.error(err);
-			}
-			callback();
-		});
 	}
 };

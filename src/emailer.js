@@ -11,6 +11,7 @@ var url = require('url');
 var path = require('path');
 var fs = require('fs');
 var _ = require('lodash');
+var jwt = require('jsonwebtoken');
 
 var User = require('./user');
 var Plugins = require('./plugins');
@@ -25,9 +26,11 @@ Emailer.transports = {
 	sendmail: nodemailer.createTransport({
 		sendmail: true,
 		newline: 'unix',
+		pool: true,
+		rateLimit: meta.config['email:sendmail:rateLimit'],
+		rateDelta: meta.config['email:sendmail:rateDelta'],
 	}),
 	smtp: undefined,
-	// gmail: undefined,
 };
 
 var app;
@@ -110,7 +113,7 @@ Emailer.setupFallbackTransport = function (config) {
 				smtpOptions.ignoreTLS = false;
 			}
 		} else {
-			smtpOptions.service = config['email:smtpTransport:service'];
+			smtpOptions.service = String(config['email:smtpTransport:service']);
 		}
 
 		Emailer.transports.smtp = nodemailer.createTransport(smtpOptions);
@@ -141,7 +144,7 @@ Emailer.registerApp = function (expressApp) {
 	app = expressApp;
 
 	var logo = null;
-	if (meta.configs.hasOwnProperty('brand:emailLogo')) {
+	if (meta.config.hasOwnProperty('brand:emailLogo')) {
 		logo = (!meta.config['brand:emailLogo'].startsWith('http') ? nconf.get('url') : '') + meta.config['brand:emailLogo'];
 	}
 
@@ -161,9 +164,15 @@ Emailer.registerApp = function (expressApp) {
 	// Update default payload if new logo is uploaded
 	pubsub.on('config:update', function (config) {
 		if (config) {
-			Emailer._defaultPayload.logo.src = config['brand:emailLogo'];
-			Emailer._defaultPayload.logo.height = config['brand:emailLogo:height'];
-			Emailer._defaultPayload.logo.width = config['brand:emailLogo:width'];
+			if (config['brand:emailLogo']) {
+				Emailer._defaultPayload.logo.src = config['brand:emailLogo'];
+			}
+			if (config['brand:emailLogo:height']) {
+				Emailer._defaultPayload.logo.height = config['brand:emailLogo:height'];
+			}
+			if (config['brand:emailLogo:width']) {
+				Emailer._defaultPayload.logo.width = config['brand:emailLogo:width'];
+			}
 
 			if (smtpSettingsChanged(config)) {
 				Emailer.setupFallbackTransport(config);
@@ -190,19 +199,27 @@ Emailer.send = function (template, uid, params, callback) {
 	async.waterfall([
 		function (next) {
 			async.parallel({
-				email: async.apply(User.getUserField, uid, 'email'),
+				userData: async.apply(User.getUserFields, uid, ['email', 'username']),
 				settings: async.apply(User.getSettings, uid),
 			}, next);
 		},
-		function (results, next) {
-			if (!results.email) {
+		async function (results) {
+			if (!results.userData || !results.userData.email) {
 				winston.warn('uid : ' + uid + ' has no email, not sending.');
-				return next();
+				return;
 			}
 			params.uid = uid;
-			Emailer.sendToEmail(template, results.email, results.settings.userLang, params, next);
+			params.username = results.userData.username;
+			params.rtl = await translator.translate('[[language:dir]]', results.settings.userLang) === 'rtl';
+			Emailer.sendToEmail(template, results.userData.email, results.settings.userLang, params, function (err) {
+				if (err) {
+					winston.error(err);
+				}
+			});
 		},
-	], callback);
+	], function (err) {
+		return callback(err);
+	});
 };
 
 Emailer.sendToEmail = function (template, email, language, params, callback) {
@@ -215,6 +232,31 @@ Emailer.sendToEmail = function (template, email, language, params, callback) {
 		'List-Id': '<' + [template, params.uid, getHostname()].join('.') + '>',
 		'List-Unsubscribe': '<' + [nconf.get('url'), 'uid', params.uid, 'settings'].join('/') + '>',
 	}, params.headers);
+
+	// Digests and notifications can be one-click unsubbed
+	let payload = {
+		template: template,
+		uid: params.uid,
+	};
+
+	switch (template) {
+	case 'digest':
+		payload = jwt.sign(payload, nconf.get('secret'), {
+			expiresIn: '30d',
+		});
+		params.headers['List-Unsubscribe'] = '<' + [nconf.get('url'), 'email', 'unsubscribe', payload].join('/') + '>';
+		params.headers['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click';
+		break;
+
+	case 'notification':
+		payload.type = params.notification.type;
+		payload = jwt.sign(payload, nconf.get('secret'), {
+			expiresIn: '30d',
+		});
+		params.headers['List-Unsubscribe'] = '<' + [nconf.get('url'), 'email', 'unsubscribe', payload].join('/') + '>';
+		params.headers['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click';
+		break;
+	}
 
 	async.waterfall([
 		function (next) {
@@ -256,6 +298,7 @@ Emailer.sendToEmail = function (template, email, language, params, callback) {
 				pid: params.pid,
 				fromUid: params.fromUid,
 				headers: params.headers,
+				rtl: params.rtl,
 			};
 			Plugins.fireHook('filter:email.modify', data, next);
 		},
@@ -306,9 +349,13 @@ function buildCustomTemplates(config) {
 			}, next);
 		},
 		function (result, next) {
-			var templates = result.templates.filter(function (template) {
-				return template.isCustom && template.text !== prevConfig['email:custom:' + path];
-			});
+			// If the new config contains any email override values, re-compile those templates
+			var toBuild = Object
+				.keys(config)
+				.filter(prop => prop.startsWith('email:custom:'))
+				.map(key => key.split(':')[2]);
+
+			var templates = result.templates.filter(template => toBuild.includes(template.path));
 			var paths = _.fromPairs(result.paths.map(function (p) {
 				var relative = path.relative(viewsDir, p).replace(/\\/g, '/');
 				return [relative, p];

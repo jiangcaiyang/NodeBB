@@ -206,13 +206,12 @@ module.exports = function (User) {
 			function (next) {
 				async.parallel([
 					function (next) {
-						db.sortedSetAdd('email:uid', uid, newEmail.toLowerCase(), next);
-					},
-					function (next) {
-						db.sortedSetAdd('email:sorted', 0, newEmail.toLowerCase() + ':' + uid, next);
-					},
-					function (next) {
-						db.sortedSetAdd('user:' + uid + ':emails', Date.now(), newEmail + ':' + Date.now(), next);
+						db.sortedSetAddBulk([
+							['email:uid', uid, newEmail.toLowerCase()],
+							['email:sorted', 0, newEmail.toLowerCase() + ':' + uid],
+							['user:' + uid + ':emails', Date.now(), newEmail + ':' + Date.now()],
+							['users:notvalidated', Date.now(), uid],
+						], next);
 					},
 					function (next) {
 						User.setUserField(uid, 'email', newEmail, next);
@@ -226,9 +225,6 @@ module.exports = function (User) {
 							});
 						}
 						User.setUserField(uid, 'email:confirmed', 0, next);
-					},
-					function (next) {
-						db.sortedSetAdd('users:notvalidated', Date.now(), uid, next);
 					},
 					function (next) {
 						User.reset.cleanByUid(uid, next);
@@ -319,11 +315,24 @@ module.exports = function (User) {
 				User.isPasswordValid(data.newPassword, next);
 			},
 			function (next) {
-				if (parseInt(uid, 10) !== parseInt(data.uid, 10)) {
-					User.isAdministrator(uid, next);
-				} else {
-					User.isPasswordCorrect(uid, data.currentPassword, data.ip, next);
+				async.parallel({
+					isAdmin: async.apply(User.isAdministrator, uid),
+					hasPassword: async.apply(User.hasPassword, uid),
+				}, next);
+			},
+			function (checks, next) {
+				if (meta.config['password:disableEdit'] && !checks.isAdmin) {
+					return next(new Error('[[error:no-privileges]]'));
 				}
+
+				if (
+					(checks.isAdmin && parseInt(uid, 10) !== parseInt(data.uid, 10)) ||		// Admins ok
+					(!checks.hasPassword && parseInt(uid, 10) === parseInt(data.uid, 10))	// Initial password set ok
+				) {
+					return next(null, true);
+				}
+
+				User.isPasswordCorrect(uid, data.currentPassword, data.ip, next);
 			},
 			function (isAdminOrPasswordMatch, next) {
 				if (!isAdminOrPasswordMatch) {

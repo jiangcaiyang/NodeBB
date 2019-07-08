@@ -1,7 +1,7 @@
 'use strict';
 
 
-var ajaxify = window.ajaxify || {};
+ajaxify = window.ajaxify || {};
 
 $(document).ready(function () {
 	var location = document.location || window.location;
@@ -71,7 +71,7 @@ $(document).ready(function () {
 			apiXHR.abort();
 		}
 
-		app.previousUrl = window.location.href;
+		app.previousUrl = !['reset'].includes(ajaxify.currentPage) ? window.location.pathname.slice(config.relative_path.length) : app.previousUrl;
 
 		url = ajaxify.start(url);
 
@@ -196,7 +196,9 @@ $(document).ready(function () {
 
 				$('#content, #footer').removeClass('ajaxifying');
 
+				// Only executed on ajaxify. Otherwise these'd be in ajaxify.end()
 				app.refreshTitle(data.title);
+				app.updateTags();
 			});
 		});
 	}

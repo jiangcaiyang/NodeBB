@@ -3,11 +3,13 @@
 
 var async = require('async');
 var winston = require('winston');
+var _ = require('lodash');
 
 var db = require('../database');
 var meta = require('../meta');
 var notifications = require('../notifications');
 var privileges = require('../privileges');
+var plugins = require('../plugins');
 var utils = require('../utils');
 
 var UserNotifications = module.exports;
@@ -16,20 +18,25 @@ UserNotifications.get = function (uid, callback) {
 	if (parseInt(uid, 10) <= 0) {
 		return setImmediate(callback, null, { read: [], unread: [] });
 	}
+
+	let unread;
 	async.waterfall([
 		function (next) {
-			getNotifications(uid, 0, 9, next);
+			getNotificationsFromSet('uid:' + uid + ':notifications:unread', uid, 0, 29, next);
 		},
-		function (notifications, next) {
-			notifications.read = notifications.read.filter(Boolean);
-			notifications.unread = notifications.unread.filter(Boolean);
-
-			var maxNotifs = 15;
-			if (notifications.read.length + notifications.unread.length > maxNotifs) {
-				notifications.read.length = maxNotifs - notifications.unread.length;
+		function (_unread, next) {
+			unread = _unread.filter(Boolean);
+			if (unread.length < 30) {
+				getNotificationsFromSet('uid:' + uid + ':notifications:read', uid, 0, 29 - unread.length, next);
+			} else {
+				next(null, []);
 			}
-
-			next(null, notifications);
+		},
+		function (read, next) {
+			next(null, {
+				read: read.filter(Boolean),
+				unread: unread,
+			});
 		},
 	], callback);
 };
@@ -40,17 +47,11 @@ function filterNotifications(nids, filter, callback) {
 	}
 	async.waterfall([
 		function (next) {
-			var keys = nids.map(function (nid) {
-				return 'notifications:' + nid;
-			});
+			const keys = nids.map(nid => 'notifications:' + nid);
 			db.getObjectsFields(keys, ['nid', 'type'], next);
 		},
 		function (notifications, next) {
-			nids = notifications.filter(function (notification) {
-				return notification && notification.nid && notification.type === filter;
-			}).map(function (notification) {
-				return notification.nid;
-			});
+			nids = notifications.filter(n => n && n.nid && n.type === filter).map(n => n.nid);
 			next(null, nids);
 		},
 	], callback);
@@ -60,17 +61,13 @@ UserNotifications.getAll = function (uid, filter, callback) {
 	var nids;
 	async.waterfall([
 		function (next) {
-			async.parallel({
-				unread: function (next) {
-					db.getSortedSetRevRange('uid:' + uid + ':notifications:unread', 0, -1, next);
-				},
-				read: function (next) {
-					db.getSortedSetRevRange('uid:' + uid + ':notifications:read', 0, -1, next);
-				},
-			}, next);
+			db.getSortedSetRevRange([
+				'uid:' + uid + ':notifications:unread',
+				'uid:' + uid + ':notifications:read',
+			], 0, -1, next);
 		},
-		function (results, next) {
-			nids = results.unread.concat(results.read);
+		function (_nids, next) {
+			nids = _.uniq(_nids);
 			db.isSortedSetMembers('notifications', nids, next);
 		},
 		function (exists, next) {
@@ -102,18 +99,7 @@ function deleteUserNids(nids, uid, callback) {
 	], nids, callback);
 }
 
-function getNotifications(uid, start, stop, callback) {
-	async.parallel({
-		unread: function (next) {
-			getNotificationsFromSet('uid:' + uid + ':notifications:unread', false, uid, start, stop, next);
-		},
-		read: function (next) {
-			getNotificationsFromSet('uid:' + uid + ':notifications:read', true, uid, start, stop, next);
-		},
-	}, callback);
-}
-
-function getNotificationsFromSet(set, read, uid, start, stop, callback) {
+function getNotificationsFromSet(set, uid, start, stop, callback) {
 	async.waterfall([
 		function (next) {
 			db.getSortedSetRevRange(set, start, stop, next);
@@ -126,7 +112,7 @@ function getNotificationsFromSet(set, read, uid, start, stop, callback) {
 
 UserNotifications.getNotifications = function (nids, uid, callback) {
 	if (!Array.isArray(nids) || !nids.length) {
-		return callback(null, []);
+		return setImmediate(callback, null, []);
 	}
 
 	var notificationData = [];
@@ -160,6 +146,14 @@ UserNotifications.getNotifications = function (nids, uid, callback) {
 		function (next) {
 			notifications.merge(notificationData, next);
 		},
+		function (notifications, next) {
+			plugins.fireHook('filter:user.notifications.getNotifications', {
+				uid: uid,
+				notifications: notifications,
+			}, function (err, result) {
+				next(err, result && result.notifications);
+			});
+		},
 	], callback);
 };
 
@@ -189,17 +183,12 @@ UserNotifications.getUnreadCount = function (uid, callback) {
 			notifications.filterExists(nids, next);
 		},
 		function (nids, next) {
-			var keys = nids.map(function (nid) {
-				return 'notifications:' + nid;
-			});
-
+			const keys = nids.map(nid => 'notifications:' + nid);
 			db.getObjectsFields(keys, ['mergeId'], next);
 		},
 		function (mergeIds, next) {
 			// Collapse any notifications with identical mergeIds
-			mergeIds = mergeIds.map(function (set) {
-				return set.mergeId;
-			});
+			mergeIds = mergeIds.map(set => set.mergeId);
 
 			next(null, mergeIds.reduce(function (count, mergeId, idx, arr) {
 				// A missing (null) mergeId means that notification is counted separately.
@@ -225,15 +214,12 @@ UserNotifications.getUnreadByField = function (uid, field, values, callback) {
 				return callback(null, []);
 			}
 
-			var keys = nids.map(nid => 'notifications:' + nid);
+			const keys = nids.map(nid => 'notifications:' + nid);
 			db.getObjectsFields(keys, ['nid', field], next);
 		},
 		function (notifications, next) {
 			const valuesSet = new Set(values.map(value => String(value)));
-			nids = notifications.filter(function (notification) {
-				return notification && notification[field] && valuesSet.has(String(notification[field]));
-			}).map(notification => notification.nid);
-
+			nids = notifications.filter(n => n && n[field] && valuesSet.has(String(n[field]))).map(n => n.nid);
 			next(null, nids);
 		},
 	], callback);
@@ -243,13 +229,9 @@ UserNotifications.deleteAll = function (uid, callback) {
 	if (parseInt(uid, 10) <= 0) {
 		return setImmediate(callback);
 	}
-	async.parallel([
-		function (next) {
-			db.delete('uid:' + uid + ':notifications:unread', next);
-		},
-		function (next) {
-			db.delete('uid:' + uid + ':notifications:read', next);
-		},
+	db.deleteAll([
+		'uid:' + uid + ':notifications:unread',
+		'uid:' + uid + ':notifications:read',
 	], callback);
 };
 

@@ -10,7 +10,11 @@
 	"search-content": "Hledat obsah",
 	"search-users": "Hledat uživatele",
 	"search-tags": "Hledat označení",
-	"allow-local-login": "Local Login",
+	"view-users": "Zobrazit uživatele",
+	"view-tags": "Zobrazit značky",
+	"view-groups": "Zobrazit skupiny",
+	"allow-local-login": "Místní přihlášení",
+	"allow-group-creation": "Vytvořit skupinu",
 
 	"find-category": "Hledat kategorii",
 	"access-category": "Přístup ke kategorii",

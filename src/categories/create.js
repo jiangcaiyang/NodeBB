@@ -1,6 +1,7 @@
 'use strict';
 
 var async = require('async');
+var _ = require('lodash');
 
 var db = require('../database');
 var groups = require('../groups');
@@ -68,6 +69,10 @@ module.exports = function (Categories) {
 					'posts:downvote',
 					'topics:delete',
 				];
+				const modPrivileges = defaultPrivileges.concat([
+					'posts:view_deleted',
+					'purge',
+				]);
 
 				async.series([
 					async.apply(db.setObject, 'category:' + category.cid, category),
@@ -78,7 +83,8 @@ module.exports = function (Categories) {
 						Categories.parseDescription(category.cid, category.description, next);
 					},
 					async.apply(db.sortedSetsAdd, ['categories:cid', 'cid:' + parentCid + ':children'], category.order, category.cid),
-					async.apply(privileges.categories.give, defaultPrivileges, category.cid, ['administrators', 'registered-users']),
+					async.apply(privileges.categories.give, defaultPrivileges, category.cid, 'registered-users'),
+					async.apply(privileges.categories.give, modPrivileges, category.cid, ['administrators', 'Global Moderators']),
 					async.apply(privileges.categories.give, ['find', 'read', 'topics:read'], category.cid, ['guests', 'spiders']),
 				], next);
 			},
@@ -153,7 +159,7 @@ module.exports = function (Categories) {
 
 				const oldParent = parseInt(destination.parentCid, 10) || 0;
 				const newParent = parseInt(results.source.parentCid, 10) || 0;
-				if (copyParent) {
+				if (copyParent && newParent !== parseInt(toCid, 10)) {
 					tasks.push(async.apply(db.sortedSetRemove, 'cid:' + oldParent + ':children', toCid));
 					tasks.push(async.apply(db.sortedSetAdd, 'cid:' + newParent + ':children', results.source.order, toCid));
 					tasks.push(function (next) {
@@ -170,6 +176,7 @@ module.exports = function (Categories) {
 				destination.link = results.source.link;
 				destination.numRecentReplies = results.source.numRecentReplies;
 				destination.class = results.source.class;
+				destination.image = results.source.image;
 				destination.imageClass = results.source.imageClass;
 
 				if (copyParent) {
@@ -207,44 +214,61 @@ module.exports = function (Categories) {
 		], callback);
 	}
 
-	Categories.copyPrivilegesFrom = function (fromCid, toCid, callback) {
+	Categories.copyPrivilegesFrom = function (fromCid, toCid, group, callback) {
+		if (typeof group === 'function') {
+			callback = group;
+			group = '';
+		}
+
 		async.waterfall([
 			function (next) {
 				plugins.fireHook('filter:categories.copyPrivilegesFrom', {
-					privileges: privileges.privilegeList.slice(),
+					privileges: group ? privileges.groupPrivilegeList.slice() : privileges.privilegeList.slice(),
 					fromCid: fromCid,
 					toCid: toCid,
+					group: group,
 				}, next);
 			},
 			function (data, next) {
-				async.each(data.privileges, function (privilege, next) {
-					copyPrivilege(privilege, data.fromCid, data.toCid, next);
-				}, next);
+				if (group) {
+					copyPrivilegesByGroup(data.privileges, data.fromCid, data.toCid, group, next);
+				} else {
+					copyPrivileges(data.privileges, data.fromCid, data.toCid, next);
+				}
 			},
 		], callback);
 	};
 
-	function copyPrivilege(privilege, fromCid, toCid, callback) {
+	function copyPrivileges(privileges, fromCid, toCid, callback) {
+		const toGroups = privileges.map(privilege => 'group:cid:' + toCid + ':privileges:' + privilege + ':members');
+		const fromGroups = privileges.map(privilege => 'group:cid:' + fromCid + ':privileges:' + privilege + ':members');
 		async.waterfall([
 			function (next) {
-				db.getSortedSetRange('group:cid:' + toCid + ':privileges:' + privilege + ':members', 0, -1, next);
+				db.getSortedSetsMembers(toGroups.concat(fromGroups), next);
 			},
 			function (currentMembers, next) {
-				async.eachSeries(currentMembers, function (member, next) {
-					groups.leave('cid:' + toCid + ':privileges:' + privilege, member, next);
+				const copyGroups = _.uniq(_.flatten(currentMembers));
+				async.each(copyGroups, function (group, next) {
+					copyPrivilegesByGroup(privileges, fromCid, toCid, group, next);
 				}, next);
+			},
+		], callback);
+	}
+
+	function copyPrivilegesByGroup(privileges, fromCid, toCid, group, callback) {
+		async.waterfall([
+			function (next) {
+				const leaveGroups = privileges.map(privilege => 'cid:' + toCid + ':privileges:' + privilege);
+				groups.leave(leaveGroups, group, next);
 			},
 			function (next) {
-				db.getSortedSetRange('group:cid:' + fromCid + ':privileges:' + privilege + ':members', 0, -1, next);
+				const checkGroups = privileges.map(privilege => 'group:cid:' + fromCid + ':privileges:' + privilege + ':members');
+				db.isMemberOfSortedSets(checkGroups, group, next);
 			},
-			function (members, next) {
-				if (!members || !members.length) {
-					return callback();
-				}
-
-				async.eachSeries(members, function (member, next) {
-					groups.join('cid:' + toCid + ':privileges:' + privilege, member, next);
-				}, next);
+			function (isMembers, next) {
+				privileges = privileges.filter((priv, index) => isMembers[index]);
+				const joinGroups = privileges.map(privilege => 'cid:' + toCid + ':privileges:' + privilege);
+				groups.join(joinGroups, group, next);
 			},
 		], callback);
 	}

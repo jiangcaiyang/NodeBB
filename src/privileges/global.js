@@ -21,7 +21,11 @@ module.exports = function (privileges) {
 		{ name: '[[admin/manage/privileges:search-content]]' },
 		{ name: '[[admin/manage/privileges:search-users]]' },
 		{ name: '[[admin/manage/privileges:search-tags]]' },
+		{ name: '[[admin/manage/privileges:view-users]]' },
+		{ name: '[[admin/manage/privileges:view-tags]]' },
+		{ name: '[[admin/manage/privileges:view-groups]]' },
 		{ name: '[[admin/manage/privileges:allow-local-login]]' },
+		{ name: '[[admin/manage/privileges:allow-group-creation]]' },
 	];
 
 	privileges.global.userPrivilegeList = [
@@ -33,7 +37,11 @@ module.exports = function (privileges) {
 		'search:content',
 		'search:users',
 		'search:tags',
+		'view:users',
+		'view:tags',
+		'view:groups',
 		'local:login',
+		'group:create',
 	];
 
 	privileges.global.groupPrivilegeList = privileges.global.userPrivilegeList.map(function (privilege) {
@@ -76,22 +84,21 @@ module.exports = function (privileges) {
 					isAdministrator: function (next) {
 						user.isAdministrator(uid, next);
 					},
-					isGlobalModerator: function (next) {
-						user.isGlobalModerator(uid, next);
-					},
 				}, next);
 			},
 			function (results, next) {
 				var privData = _.zipObject(privileges.global.userPrivilegeList, results.privileges);
-				var isAdminOrMod = results.isAdministrator || results.isGlobalModerator;
 
 				plugins.fireHook('filter:privileges.global.get', {
-					chat: privData.chat || isAdminOrMod,
-					'upload:post:image': privData['upload:post:image'] || isAdminOrMod,
-					'upload:post:file': privData['upload:post:file'] || isAdminOrMod,
-					'search:content': privData['search:content'] || isAdminOrMod,
-					'search:users': privData['search:users'] || isAdminOrMod,
-					'search:tags': privData['search:tags'] || isAdminOrMod,
+					chat: privData.chat || results.isAdministrator,
+					'upload:post:image': privData['upload:post:image'] || results.isAdministrator,
+					'upload:post:file': privData['upload:post:file'] || results.isAdministrator,
+					'search:content': privData['search:content'] || results.isAdministrator,
+					'search:users': privData['search:users'] || results.isAdministrator,
+					'search:tags': privData['search:tags'] || results.isAdministrator,
+					'view:users': privData['view:users'] || results.isAdministrator,
+					'view:tags': privData['view:tags'] || results.isAdministrator,
+					'view:groups': privData['view:groups'] || results.isAdministrator,
 				}, next);
 			},
 		], callback);
@@ -103,9 +110,6 @@ module.exports = function (privileges) {
 				helpers.isUserAllowedTo(privilege, uid, [0], function (err, results) {
 					next(err, Array.isArray(results) && results.length ? results[0] : false);
 				});
-			},
-			function (next) {
-				user.isGlobalModerator(uid, next);
 			},
 			function (next) {
 				user.isAdministrator(uid, next);

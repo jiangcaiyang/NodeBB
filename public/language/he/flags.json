@@ -9,6 +9,7 @@
 	"updated": "עודכן",
 	"target-purged": "התוכן שסומן נוקה ולא קיים יותר.",
 
+	"graph-label": "Daily Flags",
 	"quick-filters": "סינון מהיר",
 	"filter-active": "קיים סנן אחד או יותר ברשימת הסימונים הזו",
 	"filter-reset": "הסר סינון",
@@ -18,7 +19,7 @@
 	"filter-type": "סוג סימון",
 	"filter-type-all": "כל התוכן",
 	"filter-type-post": "פרסום",
-	"filter-type-user": "User",
+	"filter-type-user": "משתמש",
 	"filter-state": "מצב",
 	"filter-assignee": "UID של הממונה",
 	"filter-cid": "קטגוריה",

@@ -183,8 +183,8 @@ define('forum/topic/threadTools', [
 
 		var isLocked = data.isLocked && !ajaxify.data.privileges.isAdminOrMod;
 
-		components.get('topic/lock').toggleClass('hidden', data.isLocked);
-		components.get('topic/unlock').toggleClass('hidden', !data.isLocked);
+		components.get('topic/lock').toggleClass('hidden', data.isLocked).parent().attr('hidden', data.isLocked ? '' : null);
+		components.get('topic/unlock').toggleClass('hidden', !data.isLocked).parent().attr('hidden', !data.isLocked ? '' : null);
 
 		var hideReply = (data.isLocked || ajaxify.data.deleted) && !ajaxify.data.privileges.isAdminOrMod;
 
@@ -207,11 +207,21 @@ define('forum/topic/threadTools', [
 			return;
 		}
 
-		components.get('topic/delete').toggleClass('hidden', data.isDelete);
-		components.get('topic/restore').toggleClass('hidden', !data.isDelete);
-		components.get('topic/purge').toggleClass('hidden', !data.isDelete);
+		components.get('topic/delete').toggleClass('hidden', data.isDelete).parent().attr('hidden', data.isDelete ? '' : null);
+		components.get('topic/restore').toggleClass('hidden', !data.isDelete).parent().attr('hidden', !data.isDelete ? '' : null);
+		components.get('topic/purge').toggleClass('hidden', !data.isDelete).parent().attr('hidden', !data.isDelete ? '' : null);
 		components.get('topic/deleted/message').toggleClass('hidden', !data.isDelete);
 
+		if (data.isDelete) {
+			app.parseAndTranslate('partials/topic/deleted-message', {
+				deleter: data.user,
+				deleted: true,
+				deletedTimestampISO: utils.toISOString(Date.now()),
+			}, function (html) {
+				components.get('topic/deleted/message').replaceWith(html);
+				html.find('.timeago').timeago();
+			});
+		}
 		var hideReply = data.isDelete && !ajaxify.data.privileges.isAdminOrMod;
 
 		components.get('topic/reply/container').toggleClass('hidden', hideReply);
@@ -229,8 +239,8 @@ define('forum/topic/threadTools', [
 			return;
 		}
 
-		components.get('topic/pin').toggleClass('hidden', data.isPinned);
-		components.get('topic/unpin').toggleClass('hidden', !data.isPinned);
+		components.get('topic/pin').toggleClass('hidden', data.isPinned).parent().attr('hidden', data.isPinned ? '' : null);
+		components.get('topic/unpin').toggleClass('hidden', !data.isPinned).parent().attr('hidden', !data.isPinned ? '' : null);
 		$('[component="post/header"] i.fa-thumb-tack').toggleClass('hidden', !data.isPinned);
 		ajaxify.data.pinned = data.isPinned;
 	};

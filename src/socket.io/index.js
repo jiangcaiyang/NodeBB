@@ -10,6 +10,7 @@ var cookieParser = require('cookie-parser')(nconf.get('secret'));
 var db = require('../database');
 var user = require('../user');
 var logger = require('../logger');
+var plugins = require('../plugins');
 var ratelimit = require('../middleware/ratelimit');
 
 
@@ -130,6 +131,7 @@ function onMessage(socket, payload) {
 		return socket.disconnect();
 	}
 
+	var cbCalled = false;
 	async.waterfall([
 		function (next) {
 			checkMaintenance(socket, next);
@@ -145,9 +147,19 @@ function onMessage(socket, payload) {
 			}
 		},
 		function (next) {
-			methodToCall(socket, params, next);
+			const returned = methodToCall(socket, params, next);
+			if (returned && typeof returned.then === 'function') {
+				returned.then((payload) => {
+					next(null, payload);
+				}, next);
+			}
 		},
 	], function (err, result) {
+		if (cbCalled) {
+			return;
+		}
+
+		cbCalled = true;
 		callback(err ? { message: err.message } : null, result);
 	});
 }
@@ -179,12 +191,17 @@ function validateSession(socket, callback) {
 	if (!req.signedCookies || !req.signedCookies[nconf.get('sessionKey')]) {
 		return callback();
 	}
+
 	db.sessionStore.get(req.signedCookies[nconf.get('sessionKey')], function (err, sessionData) {
 		if (err || !sessionData) {
 			return callback(err || new Error('[[error:invalid-session]]'));
 		}
 
-		callback();
+		plugins.fireHook('static:sockets.validateSession', {
+			req: req,
+			socket: socket,
+			session: sessionData,
+		}, callback);
 	});
 }
 

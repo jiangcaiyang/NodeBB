@@ -16,10 +16,9 @@ module.exports = function (db, module) {
 		if (!key || !data) {
 			return callback();
 		}
-		if (data.hasOwnProperty('')) {
-			delete data[''];
-		}
-		db.collection('objects').updateOne({ _key: key }, { $set: data }, { upsert: true, w: 1 }, function (err) {
+
+		const writeData = helpers.serializeData(data);
+		db.collection('objects').updateOne({ _key: key }, { $set: writeData }, { upsert: true, w: 1 }, function (err) {
 			if (err) {
 				return callback(err);
 			}
@@ -34,38 +33,76 @@ module.exports = function (db, module) {
 			return callback();
 		}
 		var data = {};
-		field = helpers.fieldToString(field);
 		data[field] = value;
 		module.setObject(key, data, callback);
 	};
 
 	module.getObject = function (key, callback) {
 		if (!key) {
-			return callback();
+			return setImmediate(callback, null, null);
 		}
 
 		module.getObjects([key], function (err, data) {
-			if (err) {
-				return callback(err);
-			}
-			callback(null, data && data.length ? data[0] : null);
+			callback(err, data && data.length ? data[0] : null);
 		});
 	};
 
 	module.getObjects = function (keys, callback) {
-		var cachedData = {};
-		function getFromCache() {
-			process.nextTick(callback, null, keys.map(key => _.clone(cachedData[key])));
-		}
+		module.getObjectsFields(keys, [], callback);
+	};
 
+	module.getObjectField = function (key, field, callback) {
+		if (!key) {
+			return setImmediate(callback, null, null);
+		}
+		const cachedData = {};
+		cache.getUnCachedKeys([key], cachedData);
+		if (cachedData[key]) {
+			return setImmediate(callback, null, cachedData[key].hasOwnProperty(field) ? cachedData[key][field] : null);
+		}
+		field = helpers.fieldToString(field);
+		db.collection('objects').findOne({ _key: key }, { projection: { _id: 0, [field]: 1 } }, function (err, item) {
+			if (err || !item) {
+				return callback(err, null);
+			}
+			callback(null, item.hasOwnProperty(field) ? item[field] : null);
+		});
+	};
+
+	module.getObjectFields = function (key, fields, callback) {
+		if (!key) {
+			return setImmediate(callback, null, null);
+		}
+		module.getObjectsFields([key], fields, function (err, data) {
+			callback(err, data ? data[0] : null);
+		});
+	};
+
+	module.getObjectsFields = function (keys, fields, callback) {
 		if (!Array.isArray(keys) || !keys.length) {
-			return callback(null, []);
+			return setImmediate(callback, null, []);
+		}
+		const cachedData = {};
+		function returnData() {
+			var mapped = keys.map(function (key) {
+				if (!fields.length) {
+					return _.clone(cachedData[key]);
+				}
+
+				const item = cachedData[key] || {};
+				const result = {};
+				fields.forEach((field) => {
+					result[field] = item[field] !== undefined ? item[field] : null;
+				});
+				return result;
+			});
+
+			callback(null, mapped);
 		}
 
 		const unCachedKeys = cache.getUnCachedKeys(keys, cachedData);
-
 		if (!unCachedKeys.length) {
-			return getFromCache();
+			return process.nextTick(returnData);
 		}
 
 		var query = { _key: { $in: unCachedKeys } };
@@ -76,60 +113,14 @@ module.exports = function (db, module) {
 			if (err) {
 				return callback(err);
 			}
-
+			data = data.map(helpers.deserializeData);
 			var map = helpers.toMap(data);
 			unCachedKeys.forEach(function (key) {
 				cachedData[key] = map[key] || null;
 				cache.set(key, cachedData[key]);
 			});
 
-			getFromCache();
-		});
-	};
-
-	module.getObjectField = function (key, field, callback) {
-		if (!key) {
-			return callback();
-		}
-		module.getObject(key, function (err, item) {
-			if (err || !item) {
-				return callback(err, null);
-			}
-			callback(null, item.hasOwnProperty(field) ? item[field] : null);
-		});
-	};
-
-	module.getObjectFields = function (key, fields, callback) {
-		if (!key) {
-			return callback();
-		}
-		module.getObjectsFields([key], fields, function (err, data) {
-			callback(err, data ? data[0] : null);
-		});
-	};
-
-	module.getObjectsFields = function (keys, fields, callback) {
-		if (!Array.isArray(keys) || !keys.length) {
-			return callback(null, []);
-		}
-		module.getObjects(keys, function (err, items) {
-			if (err) {
-				return callback(err);
-			}
-			if (items === null) {
-				items = [];
-			}
-
-			const returnData = items.map((item) => {
-				item = item || {};
-				const result = {};
-				fields.forEach((field) => {
-					result[field] = item[field] !== undefined ? item[field] : null;
-				});
-				return result;
-			});
-
-			callback(null, returnData);
+			returnData();
 		});
 	};
 

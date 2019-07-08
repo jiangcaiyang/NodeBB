@@ -3,6 +3,8 @@
 var fs = require('fs');
 var path = require('path');
 
+require('../../require-main');
+
 var packageInstall = require('./package-install');
 var dirname = require('./paths').baseDir;
 
@@ -208,10 +210,10 @@ program
 	})
 	.description('List all installed plugins');
 program
-	.command('events')
-	.description('Outputs the last ten (10) administrative events recorded by NodeBB')
-	.action(function () {
-		require('./manage').listEvents();
+	.command('events [count]')
+	.description('Outputs the most recent administrative events recorded by NodeBB')
+	.action(function (count) {
+		require('./manage').listEvents(count);
 	});
 program
 	.command('info')
@@ -240,7 +242,10 @@ resetCommand
 		}
 
 		require('./reset').reset(options, function (err) {
-			if (err) { throw err; }
+			if (err) {
+				return process.exit(1);
+			}
+
 			require('../meta/build').buildAll(function (err) {
 				if (err) { throw err; }
 

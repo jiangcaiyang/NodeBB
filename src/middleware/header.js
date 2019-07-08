@@ -3,6 +3,7 @@
 var async = require('async');
 var nconf = require('nconf');
 var jsesc = require('jsesc');
+var _ = require('lodash');
 
 var db = require('../database');
 var user = require('../user');
@@ -13,6 +14,7 @@ var plugins = require('../plugins');
 var navigation = require('../navigation');
 var translator = require('../translator');
 var privileges = require('../privileges');
+var languages = require('../languages');
 var utils = require('../utils');
 
 var controllers = {
@@ -21,7 +23,7 @@ var controllers = {
 };
 
 module.exports = function (middleware) {
-	middleware.buildHeader = function (req, res, next) {
+	middleware.buildHeader = function buildHeader(req, res, next) {
 		res.locals.renderHeader = true;
 		res.locals.isAPI = false;
 		async.waterfall([
@@ -43,13 +45,13 @@ module.exports = function (middleware) {
 				}, next);
 			},
 			function (results, next) {
-				res.locals.config = results.config;
-				next();
+				// Return no arguments
+				setImmediate(next);
 			},
 		], next);
 	};
 
-	middleware.generateHeader = function (req, res, data, callback) {
+	middleware.generateHeader = function generateHeader(req, res, data, callback) {
 		var registrationType = meta.config.registrationType || 'normal';
 		res.locals.config = res.locals.config || {};
 		var templateValues = {
@@ -61,7 +63,7 @@ module.exports = function (middleware) {
 			'brand:logo:url': meta.config['brand:logo:url'] || '',
 			'brand:logo:alt': meta.config['brand:logo:alt'] || '',
 			'brand:logo:display': meta.config['brand:logo'] ? '' : 'hide',
-			allowRegistration: registrationType === 'normal' || registrationType === 'admin-approval' || registrationType === 'admin-approval-ip',
+			allowRegistration: registrationType === 'normal',
 			searchEnabled: plugins.hasListeners('filter:search.query'),
 			config: res.locals.config,
 			relative_path: nconf.get('relative_path'),
@@ -105,11 +107,10 @@ module.exports = function (middleware) {
 						});
 					},
 					navigation: async.apply(navigation.get, req.uid),
-					tags: async.apply(meta.tags.parse, req, data, res.locals.metaTags, res.locals.linkTags),
-					banned: async.apply(user.isBanned, req.uid),
-					banReason: async.apply(user.getBannedReason, req.uid),
+					banned: async.apply(user.bans.isBanned, req.uid),
+					banReason: async.apply(user.bans.getReason, req.uid),
 
-					unreadCounts: async.apply(topics.getUnreadTids, { uid: req.uid, count: true }),
+					unreadData: async.apply(topics.getUnreadData, { uid: req.uid }),
 					unreadChatCount: async.apply(messaging.getUnreadCount, req.uid),
 					unreadNotificationCount: async.apply(user.notifications.getUnreadCount, req.uid),
 				}, next);
@@ -120,6 +121,14 @@ module.exports = function (middleware) {
 					return res.redirect('/');
 				}
 
+				const unreadData = {
+					'': {},
+					new: {},
+					watched: {},
+					unreplied: {},
+				};
+
+				results.user.unreadData = unreadData;
 				results.user.isAdmin = results.isAdmin;
 				results.user.isGlobalMod = results.isGlobalMod;
 				results.user.isMod = !!results.isModerator;
@@ -130,13 +139,15 @@ module.exports = function (middleware) {
 				results.user['email:confirmed'] = results.user['email:confirmed'] === 1;
 				results.user.isEmailConfirmSent = !!results.isEmailConfirmSent;
 
-				templateValues.bootswatchSkin = parseInt(meta.config.disableCustomUserSkins, 10) !== 1 ? res.locals.config.bootswatchSkin || '' : '';
+				templateValues.bootswatchSkin = (parseInt(meta.config.disableCustomUserSkins, 10) !== 1 ? res.locals.config.bootswatchSkin : '') || meta.config.bootswatchSkin || '';
+				templateValues.config.bootswatchSkin = templateValues.bootswatchSkin || 'noskin';	// TODO remove in v1.12.0+
 
+				const unreadCounts = results.unreadData.counts;
 				var unreadCount = {
-					topic: results.unreadCounts[''] || 0,
-					newTopic: results.unreadCounts.new || 0,
-					watchedTopic: results.unreadCounts.watched || 0,
-					unrepliedTopic: results.unreadCounts.unreplied || 0,
+					topic: unreadCounts[''] || 0,
+					newTopic: unreadCounts.new || 0,
+					watchedTopic: unreadCounts.watched || 0,
+					unrepliedTopic: unreadCounts.unreplied || 0,
 					chat: results.unreadChatCount || 0,
 					notification: results.unreadNotificationCount || 0,
 				};
@@ -147,27 +158,27 @@ module.exports = function (middleware) {
 					}
 				});
 
+				const tidsByFilter = results.unreadData.tidsByFilter;
 				results.navigation = results.navigation.map(function (item) {
-					function modifyNavItem(item, route, count, content) {
+					function modifyNavItem(item, route, filter, content) {
 						if (item && item.originalRoute === route) {
+							unreadData[filter] = _.zipObject(tidsByFilter[filter], tidsByFilter[filter].map(() => true));
 							item.content = content;
-							if (count > 0) {
+							if (unreadCounts[filter] > 0) {
 								item.iconClass += ' unread-count';
 							}
 						}
 					}
-					modifyNavItem(item, '/unread', results.unreadCounts[''], unreadCount.topic);
-					modifyNavItem(item, '/unread?filter=new', results.unreadCounts.new, unreadCount.newTopic);
-					modifyNavItem(item, '/unread?filter=watched', results.unreadCounts.watched, unreadCount.watchedTopic);
-					modifyNavItem(item, '/unread?filter=unreplied', results.unreadCounts.unreplied, unreadCount.unrepliedTopic);
+					modifyNavItem(item, '/unread', '', unreadCount.topic);
+					modifyNavItem(item, '/unread?filter=new', 'new', unreadCount.newTopic);
+					modifyNavItem(item, '/unread?filter=watched', 'watched', unreadCount.watchedTopic);
+					modifyNavItem(item, '/unread?filter=unreplied', 'unreplied', unreadCount.unrepliedTopic);
 					return item;
 				});
 
 				templateValues.browserTitle = results.browserTitle;
 				templateValues.navigation = results.navigation;
 				templateValues.unreadCount = unreadCount;
-				templateValues.metaTags = results.tags.meta;
-				templateValues.linkTags = results.tags.link;
 				templateValues.isAdmin = results.user.isAdmin;
 				templateValues.isGlobalMod = results.user.isGlobalMod;
 				templateValues.showModMenu = results.user.isAdmin || results.user.isGlobalMod || results.user.isMod;
@@ -182,11 +193,14 @@ module.exports = function (middleware) {
 				templateValues.defaultLang = meta.config.defaultLang || 'en-GB';
 				templateValues.userLang = res.locals.config.userLang;
 				templateValues.languageDirection = results.languageDirection;
-				templateValues.privateUserInfo = meta.config.privateUserInfo;
-				templateValues.privateTagListing = meta.config.privateTagListing;
 
 				templateValues.template = { name: res.locals.template };
 				templateValues.template[res.locals.template] = true;
+
+				if (data.hasOwnProperty('_header')) {
+					templateValues.metaTags = data._header.tags.meta;
+					templateValues.linkTags = data._header.tags.link;
+				}
 
 				if (req.route && req.route.path === '/') {
 					modifyTitle(templateValues);
@@ -203,7 +217,7 @@ module.exports = function (middleware) {
 		});
 	};
 
-	middleware.renderHeader = function (req, res, data, callback) {
+	middleware.renderHeader = function renderHeader(req, res, data, callback) {
 		async.waterfall([
 			async.apply(middleware.generateHeader, req, res, data),
 			function (templateValues, next) {
@@ -212,12 +226,7 @@ module.exports = function (middleware) {
 		], callback);
 	};
 
-	function addTimeagoLocaleScript(scripts, userLang) {
-		var languageCode = utils.userLangToTimeagoCode(userLang);
-		scripts.push({ src: nconf.get('relative_path') + '/assets/vendor/jquery/timeago/locales/jquery.timeago.' + languageCode + '.js' });
-	}
-
-	middleware.renderFooter = function (req, res, data, callback) {
+	middleware.renderFooter = function renderFooter(req, res, data, callback) {
 		async.waterfall([
 			function (next) {
 				plugins.fireHook('filter:middleware.renderFooter', {
@@ -229,15 +238,33 @@ module.exports = function (middleware) {
 			function (data, next) {
 				async.parallel({
 					scripts: async.apply(plugins.fireHook, 'filter:scripts.get', []),
+					timeagoLocale: (next) => {
+						async.waterfall([
+							async.apply(languages.listCodes),
+							(languageCodes, next) => {
+								const userLang = res.locals.config.userLang;
+								const timeagoCode = utils.userLangToTimeagoCode(userLang);
+
+								if (languageCodes.includes(userLang) && languages.timeagoCodes.includes(timeagoCode)) {
+									const pathToLocaleFile = '/vendor/jquery/timeago/locales/jquery.timeago.' + timeagoCode + '.js';
+									next(null, (nconf.get('relative_path') + '/assets' + pathToLocaleFile));
+								} else {
+									next(null, false);
+								}
+							},
+						], next);
+					},
 				}, function (err, results) {
 					next(err, data, results);
 				});
 			},
 			function (data, results, next) {
+				if (results.timeagoLocale) {
+					results.scripts.push(results.timeagoLocale);
+				}
 				data.templateValues.scripts = results.scripts.map(function (script) {
 					return { src: script };
 				});
-				addTimeagoLocaleScript(data.templateValues.scripts, res.locals.config.userLang);
 
 				data.templateValues.useCustomJS = meta.config.useCustomJS;
 				data.templateValues.customJS = data.templateValues.useCustomJS ? meta.config.customJS : '';

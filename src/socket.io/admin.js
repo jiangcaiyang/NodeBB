@@ -14,6 +14,7 @@ var userDigest = require('../user/digest');
 var userEmail = require('../user/email');
 var logger = require('../logger');
 var events = require('../events');
+var notifications = require('../notifications');
 var emailer = require('../emailer');
 var db = require('../database');
 var analytics = require('../analytics');
@@ -273,6 +274,31 @@ SocketAdmin.email.test = function (socket, data, callback) {
 		}, callback);
 		break;
 
+	case 'notification':
+		async.waterfall([
+			function (next) {
+				notifications.create({
+					type: 'test',
+					bodyShort: '[[email:notif.test.short]]',
+					bodyLong: '[[email:notif.test.long]]',
+					nid: 'uid:' + socket.uid + ':test',
+					path: '/',
+					from: socket.uid,
+				}, next);
+			},
+			function (notifObj, next) {
+				emailer.send('notification', socket.uid, {
+					path: notifObj.path,
+					subject: utils.stripHTMLTags(notifObj.subject || '[[notifications:new_notification]]'),
+					intro: utils.stripHTMLTags(notifObj.bodyShort),
+					body: notifObj.bodyLong || '',
+					notification: notifObj,
+					showUnsubscribe: true,
+				}, next);
+			},
+		], callback);
+		break;
+
 	default:
 		emailer.send(data.template, socket.uid, payload, callback);
 		break;
@@ -331,6 +357,10 @@ SocketAdmin.logs.clear = function (socket, data, callback) {
 
 SocketAdmin.errors.clear = function (socket, data, callback) {
 	meta.errors.clear(callback);
+};
+
+SocketAdmin.deleteEvents = function (socket, eids, callback) {
+	events.deleteEvents(eids, callback);
 };
 
 SocketAdmin.deleteAllEvents = function (socket, data, callback) {

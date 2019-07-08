@@ -14,10 +14,25 @@ define('admin/advanced/events', function () {
 			});
 		});
 
-		$('#filter').on('change', function () {
-			var filter = $(this).val();
-			ajaxify.go('admin/advanced/events' + (filter ? '?filter=' + filter : ''));
+		$('.delete-event').on('click', function () {
+			var parentEl = $(this).parents('[data-eid]');
+			var eid = parentEl.attr('data-eid');
+			socket.emit('admin.deleteEvents', [eid], function (err) {
+				if (err) {
+					return app.alertError(err.message);
+				}
+				parentEl.remove();
+			});
 		});
+
+		$('#apply').on('click', Events.refresh);
+	};
+
+	Events.refresh = function (event) {
+		event.preventDefault();
+
+		var formEl = $('#filters');
+		ajaxify.go('admin/advanced/events?' + formEl.serialize());
 	};
 
 	return Events;

@@ -3,10 +3,10 @@
 var async = require('async');
 var passport = require('passport');
 var passportLocal = require('passport-local').Strategy;
-var nconf = require('nconf');
 var winston = require('winston');
 
 var controllers = require('../controllers');
+var helpers = require('../controllers/helpers');
 var plugins = require('../plugins');
 
 var loginStrategies = [];
@@ -14,8 +14,14 @@ var loginStrategies = [];
 var Auth = module.exports;
 
 Auth.initialize = function (app, middleware) {
-	app.use(passport.initialize());
-	app.use(passport.session());
+	const passportInitMiddleware = passport.initialize();
+	app.use(function passportInitialize(req, res, next) {
+		passportInitMiddleware(req, res, next);
+	});
+	const passportSessionMiddleware = passport.session();
+	app.use(function passportSession(req, res, next) {
+		passportSessionMiddleware(req, res, next);
+	});
 
 	app.use(Auth.setAuthVars);
 
@@ -23,7 +29,7 @@ Auth.initialize = function (app, middleware) {
 	Auth.middleware = middleware;
 };
 
-Auth.setAuthVars = function (req, res, next) {
+Auth.setAuthVars = function setAuthVars(req, res, next) {
 	var isSpider = req.isSpider();
 	req.loggedIn = !isSpider && !!req.user;
 	if (req.user) {
@@ -52,7 +58,12 @@ Auth.reloadRoutes = function (router, callback) {
 
 	async.waterfall([
 		function (next) {
-			plugins.fireHook('filter:auth.init', loginStrategies, next);
+			plugins.fireHook('filter:auth.init', loginStrategies, function (err) {
+				if (err) {
+					winston.error('[authentication] ' + err.stack);
+				}
+				next(null, loginStrategies);
+			});
 		},
 		function (loginStrategies, next) {
 			loginStrategies = loginStrategies || [];
@@ -68,8 +79,12 @@ Auth.reloadRoutes = function (router, callback) {
 					});
 				}
 
-				router.get(strategy.callbackURL, function (req, res, next) {
-					// Ensure the passed-back state value is identical to the saved ssoState
+				router[strategy.callbackMethod || 'get'](strategy.callbackURL, function (req, res, next) {
+					// Ensure the passed-back state value is identical to the saved ssoState (unless explicitly skipped)
+					if (strategy.checkState === false) {
+						return next();
+					}
+
 					next(req.query.state !== req.session.ssoState ? new Error('[[error:csrf-invalid]]') : null);
 				}, function (req, res, next) {
 					// Trigger registration interstitial checks
@@ -78,14 +93,44 @@ Auth.reloadRoutes = function (router, callback) {
 					// passport seems to remove `req.session.returnTo` after it redirects
 					req.session.registration.returnTo = req.session.returnTo;
 					next();
-				}, passport.authenticate(strategy.name, {
-					successReturnToOrRedirect: nconf.get('relative_path') + (strategy.successUrl !== undefined ? strategy.successUrl : '/'),
-					failureRedirect: nconf.get('relative_path') + (strategy.failureUrl !== undefined ? strategy.failureUrl : '/login'),
-				}));
+				}, function (req, res, next) {
+					passport.authenticate(strategy.name, function (err, user) {
+						if (err) {
+							delete req.session.registration;
+							return next(err);
+						}
+
+						if (!user) {
+							delete req.session.registration;
+							return helpers.redirect(res, strategy.failureUrl !== undefined ? strategy.failureUrl : '/login');
+						}
+
+						res.locals.user = user;
+						res.locals.strategy = strategy;
+						next();
+					})(req, res, next);
+				},
+				Auth.middleware.validateAuth,
+				(req, res, next) => {
+					async.waterfall([
+						async.apply(req.login.bind(req), res.locals.user),
+						async.apply(controllers.authentication.onSuccessfulLogin, req, req.uid),
+					], function (err) {
+						if (err) {
+							return next(err);
+						}
+
+						helpers.redirect(res, strategy.successUrl !== undefined ? strategy.successUrl : '/');
+					});
+				});
 			});
 
-			router.post('/register', Auth.middleware.applyCSRF, Auth.middleware.applyBlacklist, controllers.authentication.register);
-			router.post('/register/complete', Auth.middleware.applyCSRF, Auth.middleware.applyBlacklist, controllers.authentication.registerComplete);
+			var multipart = require('connect-multiparty');
+			var multipartMiddleware = multipart();
+			var middlewares = [multipartMiddleware, Auth.middleware.applyCSRF, Auth.middleware.applyBlacklist];
+
+			router.post('/register', middlewares, controllers.authentication.register);
+			router.post('/register/complete', middlewares, controllers.authentication.registerComplete);
 			router.post('/register/abort', controllers.authentication.registerAbort);
 			router.post('/login', Auth.middleware.applyCSRF, Auth.middleware.applyBlacklist, controllers.authentication.login);
 			router.post('/logout', Auth.middleware.applyCSRF, controllers.authentication.logout);

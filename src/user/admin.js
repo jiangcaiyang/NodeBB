@@ -14,18 +14,13 @@ module.exports = function (User) {
 			return setImmediate(callback);
 		}
 		var now = Date.now();
-		async.waterfall([
-			function (next) {
-				db.sortedSetAdd('uid:' + uid + ':ip', now, ip || 'Unknown', next);
-			},
-			function (next) {
-				if (ip) {
-					db.sortedSetAdd('ip:' + ip + ':uid', now, uid, next);
-				} else {
-					next();
-				}
-			},
-		], callback);
+		const bulk = [
+			['uid:' + uid + ':ip', now, ip || 'Unknown'],
+		];
+		if (ip) {
+			bulk.push(['ip:' + ip + ':uid', now, uid]);
+		}
+		db.sortedSetAddBulk(bulk, callback);
 	};
 
 	User.getIPs = function (uid, stop, callback) {
@@ -45,10 +40,10 @@ module.exports = function (User) {
 		var uids;
 		async.waterfall([
 			function (next) {
-				db.getSortedSetRangeWithScores('username:uid', 0, -1, next);
+				db.getSortedSetRange('users:joindate', 0, -1, next);
 			},
-			function (users, next) {
-				uids = users.map(user => user.score);
+			function (_uids, next) {
+				uids = _uids;
 				plugins.fireHook('filter:user.csvFields', { fields: ['uid', 'email', 'username'] }, next);
 			},
 			function (data, next) {

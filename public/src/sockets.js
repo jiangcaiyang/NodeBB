@@ -1,8 +1,8 @@
 'use strict';
 
 
-var app = window.app || {};
-var socket;
+app = window.app || {};
+socket = window.socket;
 app.isConnected = false;
 
 (function () {
@@ -51,8 +51,9 @@ app.isConnected = false;
 		});
 
 		socket.on('event:banned', onEventBanned);
-
-		socket.on('event:alert', app.alert);
+		socket.on('event:alert', function (params) {
+			app.alert(params);
+		});
 	}
 
 	function onConnect() {
@@ -153,7 +154,7 @@ app.isConnected = false;
 
 	if (
 		config.socketioOrigins &&
-		config.socketioOrigins !== '*' &&
+		config.socketioOrigins !== '*:*' &&
 		config.socketioOrigins.indexOf(location.hostname) === -1
 	) {
 		console.error(

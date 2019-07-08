@@ -1,7 +1,6 @@
 'use strict';
 
 var async = require('async');
-var validator = require('validator');
 var nconf = require('nconf');
 
 var user = require('../../user');
@@ -121,7 +120,10 @@ usersController.registrationQueue = function (req, res, next) {
 
 function getUsers(set, section, min, max, req, res, next) {
 	var page = parseInt(req.query.page, 10) || 1;
-	var resultsPerPage = 50;
+	var resultsPerPage = parseInt(req.query.resultsPerPage, 10) || 50;
+	if (![50, 100, 250, 500].includes(resultsPerPage)) {
+		resultsPerPage = 50;
+	}
 	var start = Math.max(0, page - 1) * resultsPerPage;
 	var stop = start + resultsPerPage - 1;
 	var byScore = min !== undefined && max !== undefined;
@@ -156,13 +158,13 @@ function getUsers(set, section, min, max, req, res, next) {
 		},
 		function (results) {
 			results.users = results.users.filter(function (user) {
-				user.email = validator.escape(String(user.email || ''));
 				return user && parseInt(user.uid, 10);
 			});
 			var data = {
 				users: results.users,
 				page: page,
 				pageCount: Math.max(1, Math.ceil(results.count / resultsPerPage)),
+				resultsPerPage: resultsPerPage,
 			};
 			data[section] = true;
 			render(req, res, data);

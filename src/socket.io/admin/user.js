@@ -1,7 +1,6 @@
 'use strict';
 
 var async = require('async');
-var validator = require('validator');
 var winston = require('winston');
 
 var db = require('../../database');
@@ -29,8 +28,20 @@ User.makeAdmins = function (socket, uids, callback) {
 				}
 			}
 
-			async.each(uids, function (uid, next) {
-				groups.join('administrators', uid, next);
+			async.eachSeries(uids, function (uid, next) {
+				async.waterfall([
+					function (next) {
+						groups.join('administrators', uid, next);
+					},
+					function (next) {
+						events.log({
+							type: 'user-makeAdmin',
+							uid: socket.uid,
+							targetUid: uid,
+							ip: socket.ip,
+						}, next);
+					},
+				], next);
 			}, next);
 		},
 	], callback);
@@ -52,6 +63,14 @@ User.removeAdmins = function (socket, uids, callback) {
 				}
 
 				groups.leave('administrators', uid, next);
+			},
+			function (next) {
+				events.log({
+					type: 'user-removeAdmin',
+					uid: socket.uid,
+					targetUid: uid,
+					ip: socket.ip,
+				}, next);
 			},
 		], next);
 	}, callback);
@@ -122,6 +141,25 @@ User.sendPasswordResetEmail = function (socket, uids, callback) {
 					return next(new Error('[[error:user-doesnt-have-email, ' + userData.username + ']]'));
 				}
 				user.reset.send(userData.email, next);
+			},
+		], next);
+	}, callback);
+};
+
+User.forcePasswordReset = function (socket, uids, callback) {
+	if (!Array.isArray(uids)) {
+		return callback(new Error('[[error:invalid-data]]'));
+	}
+
+	uids = uids.filter(uid => parseInt(uid, 10));
+
+	async.each(uids, function (uid, next) {
+		async.waterfall([
+			function (next) {
+				user.setUserField(uid, 'passwordExpiry', Date.now(), next);
+			},
+			function (next) {
+				user.auth.revokeAllSessions(uid, next);
 			},
 		], next);
 	}, callback);
@@ -210,51 +248,13 @@ User.search = function (socket, data, callback) {
 		function (userInfo, next) {
 			searchData.users.forEach(function (user, index) {
 				if (user && userInfo[index]) {
-					user.email = validator.escape(String(userInfo[index].email || ''));
+					user.email = userInfo[index].email;
 					user.flags = userInfo[index].flags || 0;
 					user.lastonlineISO = userInfo[index].lastonlineISO;
 					user.joindateISO = userInfo[index].joindateISO;
 				}
 			});
 			next(null, searchData);
-		},
-	], callback);
-};
-
-User.deleteInvitation = function (socket, data, callback) {
-	user.deleteInvitation(data.invitedBy, data.email, callback);
-};
-
-User.acceptRegistration = function (socket, data, callback) {
-	async.waterfall([
-		function (next) {
-			user.acceptRegistration(data.username, next);
-		},
-		function (uid, next) {
-			events.log({
-				type: 'registration-approved',
-				uid: socket.uid,
-				ip: socket.ip,
-				targetUid: uid,
-			});
-			next(null, uid);
-		},
-	], callback);
-};
-
-User.rejectRegistration = function (socket, data, callback) {
-	async.waterfall([
-		function (next) {
-			user.rejectRegistration(data.username, next);
-		},
-		function (next) {
-			events.log({
-				type: 'registration-rejected',
-				uid: socket.uid,
-				ip: socket.ip,
-				username: data.username,
-			});
-			next();
 		},
 	], callback);
 };

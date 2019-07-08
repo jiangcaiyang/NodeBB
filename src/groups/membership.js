@@ -20,6 +20,7 @@ module.exports = function (Groups) {
 				async.parallel({
 					notification: function (next) {
 						notifications.create({
+							type: 'group-request-membership',
 							bodyShort: '[[groups:request.notification_title, ' + username + ']]',
 							bodyLong: '[[groups:request.notification_text, ' + username + ', ' + groupName + ']]',
 							nid: 'group:' + groupName + ':uid:' + uid + ':request',
@@ -133,9 +134,7 @@ module.exports = function (Groups) {
 	};
 
 	Groups.getMembersOfGroups = function (groupNames, callback) {
-		db.getSortedSetsMembers(groupNames.map(function (name) {
-			return 'group:' + name + ':members';
-		}), callback);
+		db.getSortedSetsMembers(groupNames.map(name => 'group:' + name + ':members'), callback);
 	};
 
 	Groups.isMember = function (uid, groupName, callback) {
@@ -163,8 +162,8 @@ module.exports = function (Groups) {
 
 	Groups.isMembers = function (uids, groupName, callback) {
 		var cachedData = {};
-		function getFromCache() {
-			setImmediate(callback, null, uids.map(uid => cachedData[uid + ':' + groupName]));
+		function getFromCache(next) {
+			setImmediate(next, null, uids.map(uid => cachedData[uid + ':' + groupName]));
 		}
 		if (!groupName || !uids.length) {
 			return setImmediate(callback, null, uids.map(() => false));
@@ -352,14 +351,14 @@ module.exports = function (Groups) {
 	};
 
 	Groups.isInvited = function (uid, groupName, callback) {
-		if (uid <= 0) {
+		if (!(parseInt(uid, 10) > 0)) {
 			return setImmediate(callback, null, false);
 		}
 		db.isSetMember('group:' + groupName + ':invited', uid, callback);
 	};
 
 	Groups.isPending = function (uid, groupName, callback) {
-		if (uid <= 0) {
+		if (!(parseInt(uid, 10) > 0)) {
 			return setImmediate(callback, null, false);
 		}
 		db.isSetMember('group:' + groupName + ':pending', uid, callback);

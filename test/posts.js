@@ -265,6 +265,32 @@ describe('Post\'s', function () {
 			});
 		});
 
+		it('should not see post content if global mod does not have posts:view_deleted privilege', function (done) {
+			async.waterfall([
+				function (next) {
+					user.create({ username: 'global mod', password: '123456' }, next);
+				},
+				function (uid, next) {
+					groups.join('Global Moderators', uid, next);
+				},
+				function (next) {
+					privileges.categories.rescind(['posts:view_deleted'], cid, 'Global Moderators', next);
+				},
+				function (next) {
+					helpers.loginUser('global mod', '123456', function (err, _jar) {
+						assert.ifError(err);
+						var jar = _jar;
+
+						request(nconf.get('url') + '/api/topic/' + tid, { jar: jar, json: true }, function (err, res, body) {
+							assert.ifError(err);
+							assert.equal(body.posts[1].content, '[[topic:post_is_deleted]]');
+							privileges.categories.give(['posts:view_deleted'], cid, 'Global Moderators', next);
+						});
+					});
+				},
+			], done);
+		});
+
 		it('should restore a post', function (done) {
 			socketPosts.restore({ uid: voterUid }, { pid: replyPid, tid: tid }, function (err) {
 				assert.ifError(err);
@@ -426,6 +452,17 @@ describe('Post\'s', function () {
 			});
 		});
 
+		it('should disallow post editing for new users if post was made past the threshold for editing', function (done) {
+			meta.config.newbiePostEditDuration = 1;
+			setTimeout(function () {
+				socketPosts.edit({ uid: voterUid }, { pid: pid, content: 'edited post content again', title: 'edited title again', tags: ['edited-twice'] }, function (err, data) {
+					assert.equal(err.message, '[[error:post-edit-duration-expired, 1]]');
+					meta.config.newbiePostEditDuration = 3600000;
+					done();
+				});
+			}, 1000);
+		});
+
 		it('should edit a deleted post', function (done) {
 			socketPosts.delete({ uid: voterUid }, { pid: pid, tid: tid }, function (err) {
 				assert.ifError(err);
@@ -464,7 +501,7 @@ describe('Post\'s', function () {
 		it('should load diffs and reconstruct post', function (done) {
 			posts.diffs.load(replyPid, 0, voterUid, function (err, data) {
 				assert.ifError(err);
-				assert.equal(data.content, 'A reply to edit\n');
+				assert.equal(data.content, 'A reply to edit');
 				done();
 			});
 		});
@@ -669,7 +706,7 @@ describe('Post\'s', function () {
 			}, function (err, postData) {
 				assert.ifError(err);
 				pid = postData.pid;
-				privileges.categories.rescind(['read'], cid, 'guests', done);
+				privileges.categories.rescind(['topics:read'], cid, 'guests', done);
 			});
 		});
 
@@ -786,10 +823,26 @@ describe('Post\'s', function () {
 		});
 
 		it('should get pid index', function (done) {
-			socketPosts.getPidIndex({ uid: voterUid }, { pid: pid, tid: topicData.tid, topicPostSort: 'oldest-to-newest' }, function (err, index) {
+			socketPosts.getPidIndex({ uid: voterUid }, { pid: pid, tid: topicData.tid, topicPostSort: 'oldest_to_newest' }, function (err, index) {
 				assert.ifError(err);
 				assert.equal(index, 2);
 				done();
+			});
+		});
+
+		it('should get pid index in reverse', function (done) {
+			topics.reply({
+				uid: voterUid,
+				tid: topicData.tid,
+				content: 'raw content',
+			}, function (err, postData) {
+				assert.ifError(err);
+
+				socketPosts.getPidIndex({ uid: voterUid }, { pid: postData.pid, tid: topicData.tid, topicPostSort: 'newest_to_oldest' }, function (err, index) {
+					assert.ifError(err);
+					assert.equal(index, 1);
+					done();
+				});
 			});
 		});
 	});
@@ -928,6 +981,13 @@ describe('Post\'s', function () {
 				},
 			], done);
 		});
+
+		it('should not crash if id does not exist', function (done) {
+			socketPosts.reject({ uid: globalModUid }, { id: '123123123' }, function (err) {
+				assert.ifError(err);
+				done();
+			});
+		});
 	});
 
 	describe('upload methods', function () {
@@ -936,7 +996,7 @@ describe('Post\'s', function () {
 		before(function (done) {
 			// Create stub files for testing
 			['abracadabra.png', 'shazam.jpg', 'whoa.gif', 'amazeballs.jpg', 'wut.txt', 'test.bmp']
-				.forEach(filename => fs.closeSync(fs.openSync(path.join(__dirname, '../public/uploads/files', filename), 'w')));
+				.forEach(filename => fs.closeSync(fs.openSync(path.join(nconf.get('upload_path'), 'files', filename), 'w')));
 
 			topics.post({
 				uid: 1,
@@ -957,7 +1017,7 @@ describe('Post\'s', function () {
 
 					db.sortedSetCard('post:' + pid + ':uploads', function (err, length) {
 						assert.ifError(err);
-						assert.strictEqual(2, length);
+						assert.strictEqual(length, 2);
 						done();
 					});
 				});

@@ -5,10 +5,11 @@
 	"tooltip": "툴팁:",
 	"text": "텍스트:",
 	"text-class": "텍스트 클래스: <small>선택 사항</small>",
+	"class": "Class: <small>optional</small>",
 	"id": "ID: <small>선택 사항</small>",
 
 	"properties": "속성:",
-	"groups": "Groups:",
+	"groups": "그룹:",
 	"open-new-window": "새 창에서 열기",
 
 	"btn.delete": "삭제",

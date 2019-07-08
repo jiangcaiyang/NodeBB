@@ -5,9 +5,11 @@ var fs = require('fs');
 var path = require('path');
 var crypto = require('crypto');
 var async = require('async');
+var winston = require('winston');
 
 var file = require('./file');
 var plugins = require('./plugins');
+var meta = require('./meta');
 
 var image = module.exports;
 
@@ -90,6 +92,29 @@ image.size = function (path, callback) {
 	}
 };
 
+image.stripEXIF = function (path, callback) {
+	if (!meta.config.stripEXIFData || path.endsWith('.gif')) {
+		return setImmediate(callback);
+	}
+	async.waterfall([
+		function (next) {
+			fs.readFile(path, next);
+		},
+		function (buffer, next) {
+			const sharp = requireSharp();
+			const sharpImage = sharp(buffer, {
+				failOnError: true,
+			});
+			sharpImage.rotate().toFile(path, next);
+		},
+	], function (err) {
+		if (err) {
+			winston.error(err);
+		}
+		callback();
+	});
+};
+
 image.checkDimensions = function (path, callback) {
 	const meta = require('./meta');
 	image.size(path, function (err, result) {
@@ -138,4 +163,29 @@ image.writeImageDataToTempFile = function (imageData, callback) {
 
 image.sizeFromBase64 = function (imageData) {
 	return Buffer.from(imageData.slice(imageData.indexOf('base64') + 7), 'base64').length;
+};
+
+image.uploadImage = function (filename, folder, image, callback) {
+	if (plugins.hasListeners('filter:uploadImage')) {
+		return plugins.fireHook('filter:uploadImage', {
+			image: image,
+			uid: image.uid,
+		}, callback);
+	}
+
+	async.waterfall([
+		function (next) {
+			file.isFileTypeAllowed(image.path, next);
+		},
+		function (next) {
+			file.saveFileToLocal(filename, folder, image.path, next);
+		},
+		function (upload, next) {
+			next(null, {
+				url: upload.url,
+				path: upload.path,
+				name: image.name,
+			});
+		},
+	], callback);
 };

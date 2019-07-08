@@ -33,6 +33,7 @@
     "username-too-short": "Корисничко име је прекратко",
     "username-too-long": "Корисничко име је предуго",
     "password-too-long": "Шифра је предугачка.",
+    "reset-rate-limited": "Превише захтева за поништавање лозинке (ограничена стопа)",
     "user-banned": "Корисник је забрањен",
     "user-banned-reason": "Овај налог је забрањен (Разлог: %1)",
     "user-banned-reason-until": "Овај налог је забрањен до %1 (Разлог: %2)",
@@ -120,7 +121,7 @@
     "chat-edit-duration-expired": "Време у којем вам је дозвољено уређивање порука ћаскања након објављивања: %1 сек.",
     "chat-delete-duration-expired": "Време у којем вам је дозвољено брисање порука ћаскања након објављивања: %1 сек.",
     "chat-deleted-already": "Ова порука ћаскања је већ избрисана.",
-    "chat-restored-already": "This chat message has already been restored.",
+    "chat-restored-already": "Ова порука ћаскања је већ обновљена.",
     "already-voting-for-this-post": "Већ сте гласали за ову поруку.",
     "reputation-system-disabled": "Угледи су онемогућени.",
     "downvoting-disabled": "Негативно гласање је онемогућено",
@@ -153,8 +154,8 @@
     "cant-move-to-same-topic": "Није могуће преместити поруку у исту тему!",
     "cannot-block-self": "Не можете блокирати себе!",
     "cannot-block-privileged": "Не можете блокирати администраторе или глобалне модераторе",
-    "cannot-block-guest": "Guest are not able to block other users",
-    "already-blocked": "This user is already blocked",
-    "already-unblocked": "This user is already unblocked",
+    "cannot-block-guest": "Гости нису у могућности да блокирају друге кориснике",
+    "already-blocked": "Овај корисник је већ блокиран",
+    "already-unblocked": "Овај корисник је већ одблокиран",
     "no-connection": "Изгледа да постоји проблем са вашом интернет везом"
 }

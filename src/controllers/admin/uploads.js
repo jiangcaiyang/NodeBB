@@ -290,11 +290,25 @@ function uploadImage(filename, folder, uploadedFile, req, res, next) {
 						height: 50,
 					}),
 					async.apply(meta.configs.set, 'brand:emailLogo', path.join(nconf.get('upload_url'), 'system/site-logo-x50.png')),
+					function (next) {
+						image.size(uploadedFile.path, function (err, size) {
+							if (err) {
+								return next(err);
+							}
+
+							meta.configs.setMultiple({
+								'brand:logo:width': size.width,
+								'brand:logo:height': size.height,
+							}, function (err) {
+								next(err);
+							});
+						});
+					},
 				], function (err) {
 					next(err, imageData);
 				});
 			} else if (path.basename(filename, path.extname(filename)) === 'og:image' && folder === 'system') {
-				image.size(imageData.path, function (err, size) {
+				image.size(uploadedFile.path, function (err, size) {
 					if (err) {
 						next(err);
 					}

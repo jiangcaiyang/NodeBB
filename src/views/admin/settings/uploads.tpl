@@ -20,6 +20,13 @@
 				</label>
 			</div>
 
+			<div class="checkbox">
+				<label class="mdl-switch mdl-js-switch mdl-js-ripple-effect">
+					<input class="mdl-switch__input" type="checkbox" data-field="stripEXIFData">
+					<span class="mdl-switch__label"><strong>[[admin/settings/uploads:strip-exif-data]]</strong></span>
+				</label>
+			</div>
+
 			<div class="form-group">
 				<label for="privateUploadsExtensions">[[admin/settings/uploads:private-extensions]]</label>
 				<input type="text" class="form-control" value="" data-field="privateUploadsExtensions" placeholder="">
@@ -178,7 +185,7 @@
 			<p class="help-block">
 				[[admin/settings/uploads:default-covers-help]]
 			</p>
-			<input type="text" class="form-control input-lg" id="profile:defaultCovers" data-field="profile:defaultCovers" data-field-type="tagsinput" value="{config.relative_path}/assets/images/cover-default.png" placeholder="https://example.com/group1.png, https://example.com/group2.png" />
+			<input type="text" class="form-control input-lg" id="profile:defaultCovers" data-field="profile:defaultCovers" data-field-type="tagsinput" value="/assets/images/cover-default.png" placeholder="https://example.com/group1.png, https://example.com/group2.png" />
 		</form>
 	</div>
 </div>

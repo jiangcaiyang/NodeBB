@@ -52,22 +52,29 @@ Topics.getTopicsFromSet = function (set, uid, start, stop, callback) {
 	], callback);
 };
 
-Topics.getTopics = function (tids, uid, callback) {
+Topics.getTopics = function (tids, options, callback) {
+	let uid = options;
+	if (typeof options === 'object') {
+		uid = options.uid;
+	}
 	async.waterfall([
 		function (next) {
-			privileges.topics.filterTids('read', tids, uid, next);
+			privileges.topics.filterTids('topics:read', tids, uid, next);
 		},
 		function (tids, next) {
-			Topics.getTopicsByTids(tids, uid, next);
+			Topics.getTopicsByTids(tids, options, next);
 		},
 	], callback);
 };
 
-Topics.getTopicsByTids = function (tids, uid, callback) {
+Topics.getTopicsByTids = function (tids, options, callback) {
 	if (!Array.isArray(tids) || !tids.length) {
 		return callback(null, []);
 	}
-
+	let uid = options;
+	if (typeof options === 'object') {
+		uid = options.uid;
+	}
 	var uids;
 	var cids;
 	var topics;
@@ -107,7 +114,7 @@ Topics.getTopicsByTids = function (tids, uid, callback) {
 					Topics.getUserBookmarks(tids, uid, next);
 				},
 				teasers: function (next) {
-					Topics.getTeasers(topics, uid, next);
+					Topics.getTeasers(topics, options, next);
 				},
 				tags: function (next) {
 					Topics.getTopicsTagsObjects(tids, next);
@@ -188,13 +195,15 @@ Topics.getTopicWithPosts = function (topicData, set, uid, start, stop, reverse, 
 			topicData.bookmark = results.bookmark;
 			topicData.postSharing = results.postSharing;
 			topicData.deleter = results.deleter;
-			topicData.deletedTimestampISO = utils.toISOString(topicData.deletedTimestamp);
+			if (results.deleter) {
+				topicData.deletedTimestampISO = utils.toISOString(topicData.deletedTimestamp);
+			}
 			topicData.merger = results.merger;
-			topicData.mergedTimestampISO = utils.toISOString(topicData.mergedTimestamp);
+			if (results.merger) {
+				topicData.mergedTimestampISO = utils.toISOString(topicData.mergedTimestamp);
+			}
 			topicData.related = results.related || [];
-
 			topicData.unreplied = topicData.postcount === 1;
-
 			topicData.icons = [];
 
 			plugins.fireHook('filter:topic.get', { topic: topicData, uid: uid }, next);
@@ -237,7 +246,7 @@ function getMainPostAndReplies(topic, set, uid, start, stop, reverse, callback) 
 				replies = posts.slice(1);
 			}
 
-			Topics.calculatePostIndices(replies, start, topic.postcount, reverse);
+			Topics.calculatePostIndices(replies, start);
 
 			Topics.addPostData(posts, uid, next);
 		},
@@ -245,14 +254,14 @@ function getMainPostAndReplies(topic, set, uid, start, stop, reverse, callback) 
 }
 
 function getDeleter(topicData, callback) {
-	if (!topicData.deleterUid) {
+	if (!parseInt(topicData.deleterUid, 10)) {
 		return setImmediate(callback, null, null);
 	}
 	user.getUserFields(topicData.deleterUid, ['username', 'userslug', 'picture'], callback);
 }
 
 function getMerger(topicData, callback) {
-	if (!topicData.mergerUid) {
+	if (!parseInt(topicData.mergerUid, 10)) {
 		return setImmediate(callback, null, null);
 	}
 	async.waterfall([
