@@ -68,6 +68,7 @@ module.exports = function (SocketPosts) {
 				posts.display_flag_tools = socket.uid && !posts.selfPost && results.canFlag.flag;
 				posts.display_moderator_tools = posts.display_edit_tools || posts.display_delete_tools;
 				posts.display_move_tools = results.isAdmin || results.isModerator;
+				posts.display_change_owner_tools = results.isAdmin || results.isModerator;
 				posts.display_ip_ban = (results.isAdmin || results.isGlobalMod) && !posts.selfPost;
 				posts.display_history = results.history;
 				posts.toolsVisible = posts.tools.length || posts.display_moderator_tools;
@@ -248,4 +249,16 @@ module.exports = function (SocketPosts) {
 			},
 		}, callback);
 	}
+
+	SocketPosts.changeOwner = async function (socket, data) {
+		if (!data || !Array.isArray(data.pids) || !data.toUid) {
+			throw new Error('[[error:invalid-data]]');
+		}
+		const isAdminOrGlobalMod = user.isAdminOrGlobalMod(socket.uid);
+		if (!isAdminOrGlobalMod) {
+			throw new Error('[[error:no-privileges]]');
+		}
+
+		await posts.changeOwner(data.pids, data.toUid);
+	};
 };

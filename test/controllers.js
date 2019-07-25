@@ -103,14 +103,14 @@ describe('Controllers', function () {
 		var name = 'custom.tpl';
 		var tplPath = path.join(nconf.get('views_dir'), name);
 
-		before(function (done) {
+		before(async () => {
 			plugins.registerHook('myTestPlugin', {
 				hook: 'action:homepage.get:custom',
 				method: hookMethod,
 			});
 
 			fs.writeFileSync(tplPath, message);
-			meta.templates.compileTemplate(name, message, done);
+			await meta.templates.compileTemplate(name, message);
 		});
 
 		it('should load default', function (done) {
@@ -553,6 +553,15 @@ describe('Controllers', function () {
 
 	it('should load stylesheet.css', function (done) {
 		request(nconf.get('url') + '/assets/stylesheet.css', function (err, res, body) {
+			assert.ifError(err);
+			assert.equal(res.statusCode, 200);
+			assert(body);
+			done();
+		});
+	});
+
+	it('should load client.css', function (done) {
+		request(nconf.get('url') + '/assets/client.css', function (err, res, body) {
 			assert.ifError(err);
 			assert.equal(res.statusCode, 200);
 			assert(body);
@@ -1395,11 +1404,13 @@ describe('Controllers', function () {
 			request(nconf.get('url') + '/api/user/foo', { }, function (err, res) {
 				assert.ifError(err);
 				assert.equal(res.statusCode, 200);
-				user.getUserField(fooUid, 'profileviews', function (err, viewcount) {
-					assert.ifError(err);
-					assert(viewcount > 0);
-					done();
-				});
+				setTimeout(function () {
+					user.getUserField(fooUid, 'profileviews', function (err, viewcount) {
+						assert.ifError(err);
+						assert(viewcount > 0);
+						done();
+					});
+				}, 500);
 			});
 		});
 

@@ -684,7 +684,7 @@ describe('Sorted Set methods', function () {
 		it('should return 0 if score is 0', function (done) {
 			db.sortedSetScores('zeroScore', ['value1'], function (err, scores) {
 				assert.ifError(err);
-				assert.strictEqual(0, scores[0]);
+				assert.strictEqual(scores[0], 0);
 				done();
 			});
 		});
@@ -758,7 +758,7 @@ describe('Sorted Set methods', function () {
 			});
 		});
 
-		it('should return true if element is in sorted set with sre 0', function (done) {
+		it('should return true if element is in sorted set with score 0', function (done) {
 			db.isSortedSetMember('zeroscore', 'itemwithzeroscore', function (err, isMember) {
 				assert.ifError(err);
 				assert.strictEqual(isMember, true);
@@ -773,6 +773,15 @@ describe('Sorted Set methods', function () {
 				assert.equal(err, null);
 				assert.equal(arguments.length, 2);
 				assert.deepEqual(isMembers, [true, true, false]);
+				done();
+			});
+		});
+
+		it('should return true if element is in sorted set with score 0', function (done) {
+			db.isSortedSetMembers('zeroscore', ['itemwithzeroscore'], function (err, isMembers) {
+				assert.ifError(err);
+				assert.equal(arguments.length, 2);
+				assert.deepEqual(isMembers, [true]);
 				done();
 			});
 		});
@@ -954,6 +963,35 @@ describe('Sorted Set methods', function () {
 					});
 				});
 			});
+		});
+
+		it('should not remove anything if values is empty array', function (done) {
+			db.sortedSetAdd('removeNothing', [1, 2, 3], ['val1', 'val2', 'val3'], function (err) {
+				assert.ifError(err);
+				db.sortedSetRemove('removeNothing', [], function (err) {
+					assert.ifError(err);
+					db.getSortedSetRange('removeNothing', 0, -1, function (err, data) {
+						assert.ifError(err);
+						assert.deepStrictEqual(data, ['val1', 'val2', 'val3']);
+						done();
+					});
+				});
+			});
+		});
+
+		it('should do a bulk remove', async function () {
+			await db.sortedSetAddBulk([
+				['bulkRemove1', 1, 'value1'],
+				['bulkRemove1', 2, 'value2'],
+				['bulkRemove2', 3, 'value2'],
+			]);
+			await db.sortedSetRemoveBulk([
+				['bulkRemove1', 'value1'],
+				['bulkRemove1', 'value2'],
+				['bulkRemove2', 'value2'],
+			]);
+			const members = await db.getSortedSetsMembers(['bulkRemove1', 'bulkRemove2']);
+			assert.deepStrictEqual(members, [[], []]);
 		});
 	});
 
