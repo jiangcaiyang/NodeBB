@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 var db = require('../../database');
 
 var async = require('async');

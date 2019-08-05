@@ -37,15 +37,26 @@ module.exports = function (Categories) {
 	};
 
 	Categories.updateRecentTidForCid = async function (cid) {
-		const pids = await db.getSortedSetRevRange('cid:' + cid + ':pids', 0, 0);
-		if (!pids.length) {
-			return;
+		let postData;
+		let topicData;
+		let index = 0;
+		do {
+			/* eslint-disable no-await-in-loop */
+			const pids = await db.getSortedSetRevRange('cid:' + cid + ':pids', index, index);
+			if (!pids.length) {
+				return;
+			}
+			postData = await posts.getPostFields(pids[0], ['tid', 'deleted']);
+
+			if (postData && postData.tid && !postData.deleted) {
+				topicData = await topics.getTopicData(postData.tid);
+			}
+			index += 1;
+		} while (!topicData || topicData.deleted);
+
+		if (postData && postData.tid) {
+			await Categories.updateRecentTid(cid, postData.tid);
 		}
-		const tid = await posts.getPostField(pids[0], 'tid');
-		if (!tid) {
-			return;
-		}
-		await Categories.updateRecentTid(cid, tid);
 	};
 
 	Categories.getRecentTopicReplies = async function (categoryData, uid) {
