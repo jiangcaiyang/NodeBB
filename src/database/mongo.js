@@ -2,17 +2,19 @@
 'use strict';
 
 
-var winston = require('winston');
-var async = require('async');
-var nconf = require('nconf');
-var session = require('express-session');
-var _ = require('lodash');
-var semver = require('semver');
-var prompt = require('prompt');
-var utils = require('../utils');
-var client;
+const winston = require('winston');
+const async = require('async');
+const nconf = require('nconf');
+const session = require('express-session');
+const semver = require('semver');
+const prompt = require('prompt');
+const utils = require('../utils');
 
-var mongoModule = module.exports;
+let client;
+
+const connection = require('./mongo/connection');
+
+const mongoModule = module.exports;
 
 function isUriNotSpecified() {
 	return !prompt.history('mongo:uri').value;
@@ -59,91 +61,22 @@ mongoModule.questions = [
 	},
 ];
 
-mongoModule.getConnectionString = function (mongo) {
-	mongo = mongo || nconf.get('mongo');
-	var usernamePassword = '';
-	var uri = mongo.uri || '';
-	if (mongo.username && mongo.password) {
-		usernamePassword = nconf.get('mongo:username') + ':' + encodeURIComponent(nconf.get('mongo:password')) + '@';
-	} else if (!uri.includes('@') || !uri.slice(uri.indexOf('://') + 3, uri.indexOf('@'))) {
-		winston.warn('You have no mongo username/password setup!');
-	}
-
-	// Sensible defaults for Mongo, if not set
-	if (!mongo.host) {
-		mongo.host = '127.0.0.1';
-	}
-	if (!mongo.port) {
-		mongo.port = 27017;
-	}
-	const dbName = mongo.database;
-	if (dbName === undefined || dbName === '') {
-		winston.warn('You have no database name, using "nodebb"');
-		mongo.database = 'nodebb';
-	}
-
-	var hosts = mongo.host.split(',');
-	var ports = mongo.port.toString().split(',');
-	var servers = [];
-
-	for (var i = 0; i < hosts.length; i += 1) {
-		servers.push(hosts[i] + ':' + ports[i]);
-	}
-
-	return uri || 'mongodb://' + usernamePassword + servers.join() + '/' + mongo.database;
-};
-
-mongoModule.getConnectionOptions = function (mongo) {
-	mongo = mongo || nconf.get('mongo');
-	var connOptions = {
-		poolSize: 10,
-		reconnectTries: 3600,
-		reconnectInterval: 1000,
-		autoReconnect: true,
-		connectTimeoutMS: 90000,
-		useNewUrlParser: true,
-	};
-
-	return _.merge(connOptions, mongo.options || {});
-};
-
 mongoModule.init = function (callback) {
 	callback = callback || function () { };
 
-	mongoModule.connect(nconf.get('mongo'), function (err, _client) {
+	connection.connect(nconf.get('mongo'), function (err, _client) {
 		if (err) {
 			winston.error('NodeBB could not connect to your Mongo database. Mongo returned the following error', err);
 			return callback(err);
 		}
 		client = _client;
-		var db = client.db();
-		mongoModule.client = db;
-
-		require('./mongo/main')(db, mongoModule);
-		require('./mongo/hash')(db, mongoModule);
-		require('./mongo/sets')(db, mongoModule);
-		require('./mongo/sorted')(db, mongoModule);
-		require('./mongo/list')(db, mongoModule);
-		require('./mongo/transaction')(db, mongoModule);
-
-		mongoModule.async = require('../promisify')(mongoModule, ['client', 'sessionStore']);
+		mongoModule.client = client.db();
 		callback();
 	});
 };
 
-mongoModule.connect = function (options, callback) {
-	callback = callback || function () { };
-
-	var mongoClient = require('mongodb').MongoClient;
-
-	var connString = mongoModule.getConnectionString(options);
-	var connOptions = mongoModule.getConnectionOptions(options);
-
-	mongoClient.connect(connString, connOptions, callback);
-};
-
 mongoModule.createSessionStore = function (options, callback) {
-	mongoModule.connect(options, function (err, client) {
+	connection.connect(options, function (err, client) {
 		if (err) {
 			return callback(err);
 		}
@@ -202,7 +135,7 @@ mongoModule.info = function (db, callback) {
 			if (db) {
 				return setImmediate(next, null, db);
 			}
-			mongoModule.connect(nconf.get('mongo'), function (err, client) {
+			connection.connect(nconf.get('mongo'), function (err, client) {
 				next(err, client ? client.db() : undefined);
 			});
 		},
@@ -287,5 +220,14 @@ mongoModule.close = function (callback) {
 
 mongoModule.socketAdapter = function () {
 	var mongoAdapter = require('socket.io-adapter-mongo');
-	return mongoAdapter(mongoModule.getConnectionString());
+	return mongoAdapter(connection.getConnectionString());
 };
+
+require('./mongo/main')(mongoModule);
+require('./mongo/hash')(mongoModule);
+require('./mongo/sets')(mongoModule);
+require('./mongo/sorted')(mongoModule);
+require('./mongo/list')(mongoModule);
+require('./mongo/transaction')(mongoModule);
+
+mongoModule.async = require('../promisify')(mongoModule, ['client', 'sessionStore']);
